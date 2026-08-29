@@ -11,7 +11,9 @@ const path = require('path');
 const { ObjectId } = require('mongodb');
 const { buildEmail } = require('./lib/email-builder');
 const { smtpConfigured } = require('./lib/mailer');
-const { addLog, getLogs, getDb, closeDb } = require('./lib/store');
+const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
+
+const DEPLOY_TAG = 'diag-v1';
 const { enqueue, listPending } = require('./lib/queue');
 
 const app = express();
@@ -47,8 +49,10 @@ app.get('/api/health', async (req, res) => {
   res.json({
     status: 'ok',
     service: 'invite-tool',
+    tag: DEPLOY_TAG,
     smtpReady: smtpConfigured(),
     queueReady: !!db,
+    db: dbDiag(),
     time: new Date().toISOString(),
   });
 });
