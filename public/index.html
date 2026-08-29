@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>面试邀约工具</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --red: #D8553F; --pink-deep: #C26B86; --pink-soft: #F4A89B;
+    --pink-light: #FBE9EF; --pink-pale: #FFF5F2;
+    --ink: #1A1A1A; --gray: #8C8C8C;
+  }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
+    background: #fff; color: var(--ink); line-height: 1.7; min-height: 100vh;
+  }
+  .top-strip { height: 8px; background: linear-gradient(90deg, #FBE9EF 0%, #F4A89B 50%, #FBE9EF 100%); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px 60px; }
+
+  .hero { text-align: center; padding: 40px 20px 28px; }
+  .hero .eyebrow { font-size: 11px; font-weight: 700; color: var(--red); letter-spacing: 6px; margin-bottom: 14px; }
+  .hero h1 { font-size: 26px; font-weight: 800; letter-spacing: 2px; margin-bottom: 14px; }
+  .hero .dots { display: flex; justify-content: center; gap: 8px; margin-bottom: 14px; }
+  .hero .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--pink-soft); }
+  .hero .dots i:nth-child(2) { opacity: .55; } .hero .dots i:nth-child(3) { opacity: .3; }
+  .hero .sub-en { font-size: 11px; color: var(--gray); letter-spacing: 4px; }
+
+  .card {
+    background: var(--pink-pale); border-left: 4px solid var(--red);
+    border-radius: 4px; padding: 18px 24px; margin-bottom: 16px;
+  }
+  .card.bar-pink { border-left-color: var(--pink-deep); }
+  .card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .card-head .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); flex-shrink: 0; }
+  .card-head h2 { font-size: 15px; font-weight: 700; }
+  .card p { font-size: 13.5px; color: #4A4A4A; line-height: 1.9; }
+  .card .link-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+  .card .link-row code { background: #fff; border: 1px solid #E9D5DA; border-radius: 3px; padding: 4px 10px; font-size: 12.5px; color: var(--pink-deep); word-break: break-all; }
+  .btn-mini {
+    background: #fff; color: var(--red); border: 1px solid var(--red); border-radius: 3px;
+    padding: 5px 14px; font-size: 12.5px; cursor: pointer; font-family: inherit; transition: all .12s;
+  }
+  .btn-mini:hover { background: var(--pink-light); }
+
+  /* 登录 */
+  #loginView { max-width: 420px; margin: 60px auto; padding: 0 20px; }
+  #loginView .card { text-align: center; }
+  #loginView input {
+    width: 100%; padding: 11px 14px; border: 1px solid #E9D5DA; border-radius: 4px;
+    font-size: 14px; margin: 12px 0; font-family: inherit;
+  }
+  #loginView input:focus { outline: none; border-color: var(--red); box-shadow: 0 0 0 3px rgba(216,85,63,.08); }
+
+  /* 主布局 */
+  #mainView { display: none; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 13px; color: #3A3A3A; margin-bottom: 5px; font-weight: 600; }
+  .field label .req { color: var(--red); margin-left: 3px; }
+  .field input, .field select, .field textarea {
+    width: 100%; padding: 9px 11px; border: 1px solid #E9D5DA; border-radius: 4px;
+    font-size: 13.5px; font-family: inherit; background: #fff; color: var(--ink);
+  }
+  .field input:focus, .field select:focus, .field textarea:focus {
+    outline: none; border-color: var(--red); box-shadow: 0 0 0 3px rgba(216,85,63,.08);
+  }
+  .field textarea { resize: vertical; min-height: 60px; }
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 600px) { .row-2 { grid-template-columns: 1fr; } }
+
+  .mode-switch { display: flex; gap: 8px; margin-bottom: 12px; }
+  .mode-switch button {
+    flex: 1; padding: 9px 0; border: 1px solid #E9D5DA; background: #fff; border-radius: 3px;
+    font-size: 13.5px; cursor: pointer; font-family: inherit; font-weight: 600; color: #4A4A4A;
+  }
+  .mode-switch button.on { background: var(--pink-light); color: var(--red); border-color: var(--pink-deep); }
+
+  .preview-box { background: #fff; border: 1px solid #E9D5DA; border-radius: 4px; overflow: hidden; }
+  .preview-box .pv-subject {
+    padding: 12px 16px; font-size: 14px; font-weight: 700; color: var(--ink);
+    border-bottom: 1px solid #F0E3E6; background: var(--pink-pale);
+  }
+  .preview-box pre {
+    padding: 16px; font-size: 13px; line-height: 1.85; white-space: pre-wrap;
+    word-break: break-all; color: var(--ink); max-height: 560px; overflow: auto; font-family: inherit;
+  }
+
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0 4px; }
+  .btn {
+    border: 0; border-radius: 3px; padding: 11px 30px; font-size: 14px; font-weight: 600;
+    cursor: pointer; font-family: inherit; letter-spacing: 2px; transition: opacity .15s;
+  }
+  .btn-primary { background: var(--red); color: #fff; }
+  .btn-primary:hover { opacity: .88; }
+  .btn-primary:disabled { background: #C9C9C9; cursor: not-allowed; }
+  .btn-outline { background: #fff; color: var(--red); border: 1px solid var(--red); }
+  .btn-outline:hover { background: var(--pink-light); }
+
+  .msg { font-size: 13px; margin-top: 10px; display: none; border-radius: 3px; padding: 10px 14px; }
+  .msg.ok { display: block; background: var(--pink-pale); color: var(--red); }
+  .msg.err { display: block; background: #FDECEA; color: #B03A28; }
+
+  .logs table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .logs th { text-align: left; padding: 8px 10px; background: var(--pink-light); color: var(--pink-deep); font-weight: 700; }
+  .logs td { padding: 7px 10px; border-bottom: 1px solid #F0E3E6; color: #4A4A4A; }
+  .logs .muted { color: var(--gray); font-size: 11.5px; }
+
+  .footer { text-align: center; padding: 26px 0 0; margin-top: 20px; border-top: 1px solid #F0E3E6; }
+  .footer .name { font-size: 14px; font-weight: 700; letter-spacing: 3px; }
+  .footer .tag { font-size: 10px; letter-spacing: 4px; color: var(--gray); margin: 4px 0 10px; }
+  .footer .dots { display: flex; justify-content: center; gap: 8px; }
+  .footer .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--pink-soft); }
+</style>
+</head>
+<body>
+
+<div class="top-strip"></div>
+
+<!-- ===== 登录 ===== -->
+<div id="loginView">
+  <div class="hero" style="padding-bottom:20px">
+    <div class="eyebrow">INVITE · 面 试 邀 约</div>
+    <h1>面试邀约工具</h1>
+    <div class="dots"><i></i><i></i><i></i></div>
+    <p class="sub-en">HR&nbsp;INTERNAL&nbsp;·&nbsp;CLOUD&nbsp;EDITION</p>
+  </div>
+  <div class="card">
+    <div class="card-head"><span class="dot"></span><h2>请输入访问口令</h2></div>
+    <input type="password" id="tokenInput" placeholder="招聘端共享口令" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">进 入</button>
+    <div class="msg err" id="loginMsg"></div>
+  </div>
+</div>
+
+<!-- ===== 主界面 ===== -->
+<div id="mainView">
+<div class="wrap">
+  <div class="hero">
+    <div class="eyebrow">INVITE · 面 试 邀 约</div>
+    <h1>面试邀约工具</h1>
+    <div class="dots"><i></i><i></i><i></i></div>
+    <p class="sub-en">HR&nbsp;INTERNAL&nbsp;·&nbsp;CLOUD&nbsp;EDITION</p>
+  </div>
+
+  <!-- 采集表链接 -->
+  <div class="card">
+    <div class="card-head"><span class="dot"></span><h2>候选人信息采集表</h2></div>
+    <p>发给候选人填写（BOSS 直聘 / 微信均可），提交后数据自动进表格，无需回收。</p>
+    <div class="link-row">
+      <code>https://f.kdocs.cn/ksform/w/write/WlUJhTgX</code>
+      <button class="btn-mini" onclick="copyText('https://f.kdocs.cn/ksform/w/write/WlUJhTgX','采集表链接已复制')">复制链接</button>
+    </div>
+  </div>
+
+  <div class="cols">
+    <!-- 左：表单 -->
+    <div class="card">
+      <div class="card-head"><span class="dot"></span><h2>填写邀约信息</h2></div>
+
+      <div class="field">
+        <label>操作人 <span class="req">*</span><span style="font-weight:400;color:var(--gray);font-size:11px;margin-left:6px">用于发送台账</span></label>
+        <input type="text" id="operator" placeholder="如：Zoe / 俊烨">
+      </div>
+      <div class="row-2">
+        <div class="field"><label>候选人姓名 <span class="req">*</span></label><input type="text" id="name" placeholder="如：张三"></div>
+        <div class="field"><label>候选人邮箱 <span class="req">*</span></label><input type="email" id="email" placeholder="如：zhangsan@163.com"></div>
+      </div>
+      <div class="field"><label>应聘岗位 <span class="req">*</span></label><input type="text" id="job" placeholder="如：采购专员 / 海外销售"></div>
+
+      <div class="mode-switch">
+        <button id="modeOffline" class="on" onclick="setMode('offline')">线下面试</button>
+        <button id="modeOnline" onclick="setMode('online')">线上面试</button>
+      </div>
+
+      <div class="row-2">
+        <div class="field"><label>面试日期 <span class="req">*</span></label><input type="date" id="date"></div>
+        <div class="field"><label>开始时间 <span class="req">*</span></label><input type="time" id="time" value="14:00"></div>
+      </div>
+      <div class="row-2">
+        <div class="field"><label>预计时长</label>
+          <select id="duration"><option>30 分钟</option><option selected>1 小时</option><option>1.5 小时</option><option>2 小时</option></select>
+        </div>
+        <div class="field"><label>回复截止（选填）</label><input type="text" id="deadline" placeholder="如：本周五 18:00 前"></div>
+      </div>
+
+      <!-- 线下字段 -->
+      <div id="offlineFields">
+        <div class="row-2">
+          <div class="field"><label>到场联系人</label><input type="text" id="contact" placeholder="如：李明"></div>
+          <div class="field"><label>联系电话</label><input type="tel" id="phone" placeholder="11 位手机号"></div>
+        </div>
+        <div class="field"><label>面试地点（默认总部，可改）</label><input type="text" id="address" placeholder="默认：深圳市福田区富德生命保险大厦 1103"></div>
+      </div>
+
+      <!-- 线上字段 -->
+      <div id="onlineFields" style="display:none">
+        <div class="field"><label>腾讯会议链接（选填，没有则只写会议号）</label><input type="text" id="meetLink" placeholder="https://meeting.tencent.com/..."></div>
+        <div class="field"><label>会议号（选填）</label><input type="text" id="meetId" placeholder="如：474 821 073"></div>
+      </div>
+
+      <div class="field"><label>面试环节（选填）</label><input type="text" id="interviewers" placeholder="默认：面试详情现场沟通；可填 HR初面→业务复面"></div>
+      <div class="field"><label>附加说明（选填）</label><textarea id="extra" placeholder="追加在邮件末尾的说明"></textarea></div>
+    </div>
+
+    <!-- 右：预览 + 发送 -->
+    <div>
+      <div class="card bar-pink" style="padding-bottom:14px">
+        <div class="card-head"><span class="dot" style="background:var(--pink-deep)"></span><h2>邮件实时预览</h2></div>
+        <div class="preview-box">
+          <div class="pv-subject" id="pvSubject">— 填写左侧后自动生成 —</div>
+          <pre id="pvBody"></pre>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" id="sendBtn" onclick="doSend()">一键发送</button>
+          <button class="btn btn-outline" onclick="copyCurrent()">复制全文</button>
+        </div>
+        <div class="msg" id="sendMsg"></div>
+        <p style="font-size:11.5px;color:var(--gray);margin-top:6px">发件人：人力资源部 &lt;HR_Support@insightelectionhk.com&gt; · 由云端服务直接发送</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><span class="dot"></span><h2>最近发送 <button class="btn-mini" style="margin-left:8px" onclick="loadLogs()">刷新</button></h2></div>
+        <div class="logs"><table>
+          <thead><tr><th>时间</th><th>候选人</th><th>岗位</th><th>形式</th><th>操作人</th></tr></thead>
+          <tbody id="logsBody"><tr><td colspan="5" class="muted">加载中…</td></tr></tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="name">人力资源部</div>
+    <div class="tag">HUMAN&nbsp;RESOURCES</div>
+    <div class="dots"><i></i><i></i><i></i></div>
+  </div>
+</div>
+</div>
+
+<script>
+const API = location.origin;
+let TOKEN = localStorage.getItem('invite_token') || '';
+let MODE = 'offline';
+let CURRENT = { subject: '', body: '' };
+let pvTimer = null;
+
+// ===== 登录 =====
+async function doLogin() {
+  const t = document.getElementById('tokenInput').value.trim();
+  const msg = document.getElementById('loginMsg');
+  msg.className = 'msg'; msg.style.display = 'none';
+  try {
+    const r = await fetch(API + '/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: t }),
+    });
+    const d = await r.json();
+    if (r.ok) {
+      TOKEN = t; localStorage.setItem('invite_token', t);
+      enterMain();
+    } else { msg.textContent = d.error || '登录失败'; msg.className = 'msg err'; }
+  } catch (e) { msg.textContent = '网络错误：' + e.message; msg.className = 'msg err'; }
+}
+
+function enterMain() {
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('mainView').style.display = 'block';
+  loadLogs(); schedulePreview();
+}
+
+if (TOKEN) {
+  // 已有口令则静默验证
+  fetch(API + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: TOKEN }) })
+    .then(r => { if (r.ok) enterMain(); }).catch(() => {});
+}
+
+// ===== 数据收集 =====
+function collect() {
+  return {
+    operator: val('operator'), name: val('name'), email: val('email'), job: val('job'),
+    mode: MODE, date: val('date'), time: val('time'), duration: val('duration'),
+    deadline: val('deadline'), contact: val('contact'), phone: val('phone'),
+    address: val('address'), meetLink: val('meetLink'), meetId: val('meetId'),
+    interviewers: val('interviewers'), extra: val('extra'),
+  };
+}
+function val(id) { return (document.getElementById(id).value || '').trim(); }
+function onInput() { clearTimeout(pvTimer); pvTimer = setTimeout(schedulePreview, 350); }
+function schedulePreview() { refreshPreview(); }
+document.querySelectorAll('input,select,textarea').forEach(el => {
+  el.addEventListener('input', onInput); el.addEventListener('change', onInput);
+});
+
+function setMode(m) {
+  MODE = m;
+  document.getElementById('modeOffline').classList.toggle('on', m === 'offline');
+  document.getElementById('modeOnline').classList.toggle('on', m === 'online');
+  document.getElementById('offlineFields').style.display = m === 'offline' ? '' : 'none';
+  document.getElementById('onlineFields').style.display = m === 'online' ? '' : 'none';
+  refreshPreview();
+}
+
+async function refreshPreview() {
+  const d = collect();
+  if (!d.name || !d.email || !d.job || !d.date) {
+    document.getElementById('pvSubject').textContent = '— 填写左侧后自动生成 —';
+    document.getElementById('pvBody').textContent = '';
+    CURRENT = { subject: '', body: '' };
+    return;
+  }
+  try {
+    const r = await fetch(API + '/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+      body: JSON.stringify(d),
+    });
+    const res = await r.json();
+    if (r.ok) {
+      CURRENT = res;
+      document.getElementById('pvSubject').textContent = res.subject;
+      document.getElementById('pvBody').textContent = res.body;
+    }
+  } catch (e) {}
+}
+
+// ===== 发送 =====
+async function doSend() {
+  const d = collect();
+  const msg = document.getElementById('sendMsg');
+  const btn = document.getElementById('sendBtn');
+  msg.className = 'msg'; msg.style.display = 'none';
+  if (!d.name || !d.email || !d.job || !d.date) {
+    msg.textContent = '请先填完：姓名、邮箱、岗位、面试日期'; msg.className = 'msg err'; return;
+  }
+  if (!confirm(`确认发送？\n收件人：${d.email}\n主题：${CURRENT.subject || '（生成中…）'}`)) return;
+  btn.disabled = true; btn.textContent = '发送中…';
+  try {
+    const r = await fetch(API + '/api/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+      body: JSON.stringify(d),
+    });
+    const res = await r.json();
+    if (r.ok && res.success) {
+      msg.textContent = `✅ 已发送 · ${res.sender} · mailId ${res.messageId.slice(0, 18)}…`;
+      msg.className = 'msg ok';
+      loadLogs();
+    } else if (res.fallback === 'copy') {
+      CURRENT = { subject: res.subject, body: res.body };
+      msg.innerHTML = '⚠️ ' + res.error + '<br>可先点「复制全文」手动发送';
+      msg.className = 'msg err';
+    } else {
+      msg.textContent = '❌ ' + (res.error || '发送失败'); msg.className = 'msg err';
+    }
+  } catch (e) { msg.textContent = '网络错误：' + e.message; msg.className = 'msg err'; }
+  btn.disabled = false; btn.textContent = '一键发送';
+}
+
+function copyCurrent() {
+  if (!CURRENT.body) { alert('请先填写左侧信息生成预览'); return; }
+  copyText(`主题：${CURRENT.subject}\n\n${CURRENT.body}`, '邮件全文已复制，可直接粘贴到邮箱发送');
+}
+
+function copyText(t, tip) {
+  const done = () => alert(tip);
+  if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(t).then(done).catch(() => fallbackCopy(t, done)); }
+  else fallbackCopy(t, done);
+}
+function fallbackCopy(t, done) {
+  const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta);
+  ta.select(); try { document.execCommand('copy'); } catch (e) {} document.body.removeChild(ta); done();
+}
+
+// ===== 记录 =====
+async function loadLogs() {
+  try {
+    const r = await fetch(API + '/api/logs', { headers: { 'Authorization': 'Bearer ' + TOKEN } });
+    const d = await r.json();
+    const tb = document.getElementById('logsBody');
+    if (!r.ok) { tb.innerHTML = '<tr><td colspan="5" class="muted">加载失败</td></tr>'; return; }
+    if (!d.logs.length) { tb.innerHTML = '<tr><td colspan="5" class="muted">暂无发送记录</td></tr>'; return; }
+    tb.innerHTML = d.logs.map(l => `<tr>
+      <td class="muted">${(l.sentAt || '').replace('T', ' ').slice(5, 16)}</td>
+      <td>${esc(l.candidateName)}</td><td>${esc(l.jobTitle)}</td>
+      <td>${l.mode === 'online' ? '线上' : '线下'}</td><td>${esc(l.sentBy)}</td></tr>`).join('');
+  } catch (e) {}
+}
+function esc(s) { return (s || '').replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c])); }
+</script>
+</body>
+</html>
