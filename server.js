@@ -10,7 +10,7 @@ const express = require('express');
 const path = require('path');
 const { ObjectId } = require('mongodb');
 const { buildEmail } = require('./lib/email-builder');
-const { smtpConfigured } = require('./lib/mailer');
+const { sendMail, smtpConfigured } = require('./lib/mailer');
 const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
 
 const DEPLOY_TAG = 'diag-v1';
