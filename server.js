@@ -194,8 +194,9 @@ app.get('/api/queue', auth, async (req, res) => {
 });
 
 app.get('/api/smtpdiag', auth, async (req, res) => {
-  const { getTransporter } = require('./lib/mailer');
+  const isResend = (process.env.SMTP_HOST || 'smtp.resend.com').includes('resend');
   const info = {
+    mode: isResend ? 'Resend HTTP API (443)' : 'SMTP',
     host: process.env.SMTP_HOST || '(默认 smtp.resend.com)',
     port: process.env.SMTP_PORT || '(默认 465)',
     user: process.env.SMTP_USER || '(默认 resend)',
@@ -205,7 +206,27 @@ app.get('/api/smtpdiag', auth, async (req, res) => {
     passSet: !!process.env.SMTP_PASS,
     passLength: (process.env.SMTP_PASS || '').length,
   };
+
+  if (isResend) {
+    try {
+      const r = await fetch('https://api.resend.com/domains', {
+        headers: { Authorization: `Bearer ${process.env.SMTP_PASS || ''}` },
+      });
+      const d = await r.json().catch(() => ({}));
+      res.json({
+        ...info,
+        verify: r.ok ? 'OK — Resend API 可达，API key 有效' : 'FAIL',
+        apiStatus: r.status,
+        apiResp: r.ok ? (d.data ? `${d.data.length} 个域名` : 'OK') : (d.message || JSON.stringify(d)),
+      });
+    } catch (e) {
+      res.json({ ...info, verify: 'FAIL', error: e.message, code: e.code || '-' });
+    }
+    return;
+  }
+
   try {
+    const { getTransporter } = require('./lib/mailer');
     const t = getTransporter();
     await t.verify();
     res.json({ ...info, verify: 'OK — SMTP 可连通且认证通过' });
