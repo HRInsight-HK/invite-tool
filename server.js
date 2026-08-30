@@ -160,6 +160,7 @@ app.post('/api/send', auth, async (req, res) => {
         queued: true,
         queueId: id,
         subject,
+        smtpError: e.message,
         message: 'SMTP 直发失败，已加入本地 worker 队列（你电脑开 worker 后自动发出）',
       });
     } catch (qe) {
@@ -190,6 +191,27 @@ app.get('/api/queue', auth, async (req, res) => {
   ]);
   const norm = (arr) => arr.map(d => ({ ...d, _id: d._id.toString() }));
   res.json({ pending: norm(pending), processing: norm(processing), done: norm(done), failed: norm(failed) });
+});
+
+app.get('/api/smtpdiag', auth, async (req, res) => {
+  const { getTransporter } = require('./lib/mailer');
+  const info = {
+    host: process.env.SMTP_HOST || '(默认 smtp.resend.com)',
+    port: process.env.SMTP_PORT || '(默认 465)',
+    user: process.env.SMTP_USER || '(默认 resend)',
+    fromAddr: process.env.SMTP_FROM_ADDR || '(默认 onboarding@resend.dev)',
+    fromName: process.env.SMTP_FROM_NAME || '(默认 人力资源部)',
+    replyTo: process.env.REPLY_TO || '(默认 HR_Support@insightelectionhk.com)',
+    passSet: !!process.env.SMTP_PASS,
+    passLength: (process.env.SMTP_PASS || '').length,
+  };
+  try {
+    const t = getTransporter();
+    await t.verify();
+    res.json({ ...info, verify: 'OK — SMTP 可连通且认证通过' });
+  } catch (e) {
+    res.json({ ...info, verify: 'FAIL', error: e.message, code: e.code || '-' });
+  }
 });
 
 const server = app.listen(PORT, () => {
