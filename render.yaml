@@ -11,14 +11,16 @@ services:
       - key: ACCESS_TOKEN
         sync: false          # 访问口令（招聘同事共用，自定一个）
       - key: SMTP_PASS
-        sync: false          # HR_Support@insightelectionhk.com 的 SMTP 授权码
+        sync: false          # Resend API key 或 exmail SMTP 授权码（优先 Resend）
       - key: MONGODB_URI
         sync: false          # 复用 Atlas 集群（存发送台账）
-      - key: SMTP_USER
-        value: HR_Support@insightelectionhk.com
       - key: SMTP_HOST
-        value: smtp.exmail.qq.com
+        value: smtp.resend.com
       - key: SMTP_PORT
         value: "465"
+      - key: SMTP_USER
+        value: resend
       - key: SMTP_FROM_NAME
         value: 人力资源部
+      - key: SMTP_FROM_ADDR
+        value: onboarding@resend.dev    # 测试用；若要 HR_Support@insightelectionhk.com 需域名验证

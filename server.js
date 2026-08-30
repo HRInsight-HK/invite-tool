@@ -96,63 +96,79 @@ app.post('/api/send', auth, async (req, res) => {
   }
 
   try {
-    // 入队 → 本地 worker 轮询消费，走 wecom-cli 真发邮件
-    const { id } = await enqueue({
+    // 优先 SMTP 直发（Resend 等云端可达的通道），失败才入队让本地 worker 兜底
+    const { messageId, from } = await sendMail({ to: data.email, subject, body });
+    bumpRate();
+
+    const log = {
       to: data.email,
       candidateName: (data.name || '').trim(),
       jobTitle: (data.job || '').trim(),
       mode: data.mode === 'online' ? 'online' : 'offline',
       subject,
-      body,
-      operator: (data.operator || 'HR').trim() || 'HR',
-      meta: {
-        date: data.date,
-        time: data.time,
-        meetLink: data.meetLink || '',
-        meetId: data.meetId || '',
-        contact: data.contact || '',
-        phone: data.phone || '',
-        address: data.address || '',
-        access: data.access || '',
-        interviewers: data.interviewers || '',
-        deadline: data.deadline || '',
-        attachPpt: !!data.attachPpt,
-      },
-    });
-    bumpRate();
-
-    // 同步写一条 pending 记录到 logs（前端能立刻看到任务创建）
-    await addLog({
-      to: data.email,
-      candidateName: data.name || '',
-      jobTitle: data.job || '',
-      mode: data.mode === 'online' ? 'online' : 'offline',
-      subject,
       sentBy: (data.operator || 'HR').trim() || 'HR',
       sentAt: new Date().toISOString(),
-      status: 'queued',
-      queueId: id,
-    });
+      messageId,
+      status: 'sent',
+      sender: from,
+    };
+    const stored = await addLog(log);
 
-    res.json({
-      success: true,
-      queued: true,
-      queueId: id,
-      subject,
-      message: '已加入发送队列，本地客户端会在数秒内通过「人事小助手（内用）」代发邮件',
-    });
+    res.json({ success: true, sent: true, subject, messageId, stored, sender: from });
   } catch (e) {
-    if (e.code === 'QUEUE_UNAVAILABLE') {
-      // 队列不可用：降级返回全文，让前端提示"复制全文"
-      return res.status(503).json({
-        error: e.message,
+    if (e.code === 'SMTP_NOT_CONFIGURED') {
+      return res.status(503).json({ error: e.message, subject, body, fallback: 'copy' });
+    }
+    console.error('[Send] SMTP 直发失败，转本地队列:', e.message);
+    try {
+      const { id } = await enqueue({
+        to: data.email,
+        candidateName: (data.name || '').trim(),
+        jobTitle: (data.job || '').trim(),
+        mode: data.mode === 'online' ? 'online' : 'offline',
         subject,
         body,
-        fallback: 'copy',
+        operator: (data.operator || 'HR').trim() || 'HR',
+        meta: {
+          date: data.date,
+          time: data.time,
+          meetLink: data.meetLink || '',
+          meetId: data.meetId || '',
+          contact: data.contact || '',
+          phone: data.phone || '',
+          address: data.address || '',
+          access: data.access || '',
+          interviewers: data.interviewers || '',
+          deadline: data.deadline || '',
+          attachPpt: !!data.attachPpt,
+        },
       });
+      bumpRate();
+      await addLog({
+        to: data.email,
+        candidateName: data.name || '',
+        jobTitle: data.job || '',
+        mode: data.mode === 'online' ? 'online' : 'offline',
+        subject,
+        sentBy: (data.operator || 'HR').trim() || 'HR',
+        sentAt: new Date().toISOString(),
+        status: 'queued',
+        queueId: id,
+      });
+      res.json({
+        success: true,
+        queued: true,
+        queueId: id,
+        subject,
+        message: 'SMTP 直发失败，已加入本地 worker 队列（你电脑开 worker 后自动发出）',
+      });
+    } catch (qe) {
+      if (qe.code === 'QUEUE_UNAVAILABLE') {
+        return res.status(503).json({ error: qe.message, subject, body, fallback: 'copy' });
+      }
+      console.error('[Send] 入队也失败:', qe.message);
+      res.status(500).json({ error: '发送失败：' + qe.message });
     }
-    console.error('[Send] 入队失败:', e.message);
-    res.status(500).json({ error: '入队失败：' + e.message });
   }
 });
 
@@ -179,7 +195,7 @@ app.get('/api/queue', auth, async (req, res) => {
 const server = app.listen(PORT, () => {
   console.log(`[invite-tool] listening on :${PORT}`);
   console.log(`  SMTP: ${smtpConfigured() ? '已配置' : '未配置'}`);
-  console.log(`  队列: 写入 Atlas（云端只入队，本地 worker 消费并通过 wecom-cli 真发）`);
+  console.log(`  队列: SMTP 失败时回退到本地 worker（通过 wecom-cli 真发）`);
   console.log(`  口令: ${ACCESS_TOKEN ? '已配置' : '未配置（登录不可用）'}`);
 });
 
