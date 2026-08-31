@@ -13,7 +13,7 @@ const { buildEmail, buildHtml } = require('./lib/email-builder');
 const { sendMail, smtpConfigured } = require('./lib/mailer');
 const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
 
-const DEPLOY_TAG = 'brevo-diag-v1';
+const DEPLOY_TAG = 'brevo-diag-v2';
 const { enqueue, listPending } = require('./lib/queue');
 
 const app = express();
@@ -99,7 +99,18 @@ app.get('/api/brevo-status', auth, async (req, res) => {
       reason: ev.reason || '',
       messageId: ev['message-id'] || ev.messageId || '',
     }));
-    res.json({ count: events.length, events });
+    // 附带 senders 验证状态（诊断"sender not valid"拒绝）
+    let senders = null;
+    try {
+      const sresp = await fetch('https://api.brevo.com/v3/senders', {
+        headers: { 'accept': 'application/json', 'api-key': key },
+      });
+      const sdata = await sresp.json().catch(() => ({}));
+      if (sresp.ok && Array.isArray(sdata.senders)) {
+        senders = sdata.senders.map(s => ({ email: s.email, active: s.active }));
+      }
+    } catch (_) { /* senders 查询失败不影响 events 返回 */ }
+    res.json({ count: events.length, events, senders });
   } catch (e) {
     res.status(502).json({ error: `Brevo 查询失败: ${e.message}` });
   }
