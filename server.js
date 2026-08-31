@@ -13,7 +13,7 @@ const { buildEmail, buildHtml } = require('./lib/email-builder');
 const { sendMail, smtpConfigured } = require('./lib/mailer');
 const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
 
-const DEPLOY_TAG = 'hook-v5';
+const DEPLOY_TAG = 'brevo-diag-v1';
 const { enqueue, listPending } = require('./lib/queue');
 
 const app = express();
@@ -67,6 +67,42 @@ app.post('/api/login', (req, res) => {
     return res.status(401).json({ error: '口令不正确' });
   }
   res.json({ ok: true, smtpReady: smtpConfigured() });
+});
+
+// Brevo 投递状态查询（诊断"云端显示发送成功但候选人没收到"）：
+// Render 出口 IP 固定且已在 Brevo 后台授权，从云端查 events 最稳。
+// 用法：GET /api/brevo-status            → 最近 50 条事件
+//       GET /api/brevo-status?email=x     → 按收件人过滤
+//       GET /api/brevo-status?messageId=x → 按邮件过滤
+app.get('/api/brevo-status', auth, async (req, res) => {
+  const key = process.env.BREVO_API_KEY;
+  if (!key) {
+    return res.status(503).json({ error: '未配置 BREVO_API_KEY，Brevo 通道未启用' });
+  }
+  const params = new URLSearchParams({ limit: '50' });
+  if (req.query.email) params.set('email', String(req.query.email));
+  if (req.query.event) params.set('event', String(req.query.event));
+  if (req.query.messageId) params.set('messageId', String(req.query.messageId));
+  try {
+    const resp = await fetch(`https://api.brevo.com/v3/smtp/statistics/events?${params}`, {
+      headers: { 'accept': 'application/json', 'api-key': key },
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      return res.status(502).json({ error: `Brevo API ${resp.status}: ${data.message || JSON.stringify(data)}` });
+    }
+    const events = (data.events || []).map(ev => ({
+      event: ev.event,
+      email: ev.email,
+      subject: ev.subject,
+      date: ev.date,
+      reason: ev.reason || '',
+      messageId: ev['message-id'] || ev.messageId || '',
+    }));
+    res.json({ count: events.length, events });
+  } catch (e) {
+    res.status(502).json({ error: `Brevo 查询失败: ${e.message}` });
+  }
 });
 
 app.post('/api/preview', auth, (req, res) => {
