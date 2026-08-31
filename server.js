@@ -13,7 +13,7 @@ const { buildEmail, buildHtml } = require('./lib/email-builder');
 const { sendMail, smtpConfigured } = require('./lib/mailer');
 const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
 
-const DEPLOY_TAG = 'hook-v3';
+const DEPLOY_TAG = 'hook-v4';
 const { enqueue, listPending } = require('./lib/queue');
 
 const app = express();
@@ -243,6 +243,23 @@ app.get('/api/wps-hook', async (req, res) => {
 // 从 WPS 推送的 JSON 里模糊提取关键字段（推送字段名不固定，按 key/值特征识别）
 function parseWpsSubmission(obj) {
   const flat = {};
+
+  // 优先处理 WPS 官方推送格式：answerContents = [{question, answer, ...}] 数组
+  // 先把 question→answer 摊平成 flat（题目文本做 key，答案做 value）
+  const ac = obj && (obj.answerContents || obj.answers || obj.answer_content);
+  if (Array.isArray(ac)) {
+    for (const item of ac) {
+      if (item && typeof item === 'object') {
+        const q = String(item.question || item.title || item.label || item.q || item.name || '');
+        const a = item.answer !== undefined ? item.answer : (item.value || item.a || '');
+        if (q || a) flat[q || 'answer'] = Array.isArray(a) ? a.join('；') : (a == null ? '' : String(a));
+      } else if (item != null) {
+        flat['answer'] = String(item);
+      }
+    }
+  }
+
+  // 兜底：全对象递归摊平（key 含路径）
   (function walk(o, p) {
     if (o && typeof o === 'object' && !Array.isArray(o)) {
       Object.keys(o).forEach(k => walk(o[k], p ? p + '.' + k : k));
