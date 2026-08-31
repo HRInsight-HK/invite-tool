@@ -9,7 +9,7 @@
 const express = require('express');
 const path = require('path');
 const { ObjectId } = require('mongodb');
-const { buildEmail } = require('./lib/email-builder');
+const { buildEmail, buildHtml } = require('./lib/email-builder');
 const { sendMail, smtpConfigured } = require('./lib/mailer');
 const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
 
@@ -79,9 +79,12 @@ app.post('/api/preview', auth, (req, res) => {
 
 app.post('/api/send', auth, async (req, res) => {
   const data = req.body || {};
-  let subject, body;
+  let subject, body, html;
   try {
-    ({ subject, body } = buildEmail(data));
+    const built = buildEmail(data);
+    subject = built.subject;
+    body = built.body;
+    html = buildHtml(built.ctx);
   } catch (e) {
     return res.status(400).json({ error: e.message });
   }
@@ -97,7 +100,7 @@ app.post('/api/send', auth, async (req, res) => {
 
   try {
     // 优先 SMTP 直发（Resend 等云端可达的通道），失败才入队让本地 worker 兜底
-    const { messageId, from } = await sendMail({ to: data.email, subject, body });
+    const { messageId, from } = await sendMail({ to: data.email, subject, body, html });
     bumpRate();
 
     const log = {
