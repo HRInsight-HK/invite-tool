@@ -13,7 +13,7 @@ const { buildEmail, buildHtml } = require('./lib/email-builder');
 const { sendMail, smtpConfigured } = require('./lib/mailer');
 const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
 
-const DEPLOY_TAG = 'brevo-gmail-forced';
+const DEPLOY_TAG = 'brevo-hrsupport-final';
 const { enqueue, listPending } = require('./lib/queue');
 
 const app = express();
