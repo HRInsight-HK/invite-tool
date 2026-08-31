@@ -110,7 +110,7 @@ app.post('/api/send', auth, async (req, res) => {
       mode: data.mode === 'online' ? 'online' : 'offline',
       subject,
       sentBy: (data.operator || 'HR').trim() || 'HR',
-      sentAt: new Date().toISOString(),
+      sentAt: new Date(),
       messageId,
       status: 'sent',
       sender: from,
@@ -154,7 +154,7 @@ app.post('/api/send', auth, async (req, res) => {
         mode: data.mode === 'online' ? 'online' : 'offline',
         subject,
         sentBy: (data.operator || 'HR').trim() || 'HR',
-        sentAt: new Date().toISOString(),
+        sentAt: new Date(),
         status: 'queued',
         queueId: id,
       });
