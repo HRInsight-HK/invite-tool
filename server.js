@@ -13,7 +13,7 @@ const { buildEmail, buildHtml } = require('./lib/email-builder');
 const { sendMail, smtpConfigured } = require('./lib/mailer');
 const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
 
-const DEPLOY_TAG = 'brand-v1';
+const DEPLOY_TAG = 'sync-v2';
 const { enqueue, listPending } = require('./lib/queue');
 
 const app = express();
@@ -194,6 +194,111 @@ app.get('/api/queue', auth, async (req, res) => {
   ]);
   const norm = (arr) => arr.map(d => ({ ...d, _id: d._id.toString() }));
   res.json({ pending: norm(pending), processing: norm(processing), done: norm(done), failed: norm(failed) });
+});
+
+// ===== WPS 表单 Webhook（候选人数据自动同步，2026-08-31）=====
+// 绑定方式：WPS 表单 → 设置 → 提交表单后 → 数据推送(Webhook)
+//   URL 填 https://invite-tool.onrender.com/api/wps-hook?c=<校验码>
+//   <校验码> = WPS 弹窗里显示的 bind_code（弹窗里有「复制」按钮）
+// WPS 校验时会 GET 该地址，这里返回 {"bind_code": <校验码>} 即绑定成功；
+// 绑定后每次有人提交表单，WPS 会 POST 提交数据到这里，自动入库。
+
+app.get('/api/wps-hook', (req, res) => {
+  const code = (req.query.c || req.query.bind_code || req.query.code || '').toString();
+  if (!code) {
+    return res.status(400).json({
+      error: '缺少校验码：URL 需为 /api/wps-hook?c=<WPS弹窗里显示的bind_code>',
+    });
+  }
+  res.json({ bind_code: code });
+});
+
+// 从 WPS 推送的 JSON 里模糊提取关键字段（推送字段名不固定，按 key/值特征识别）
+function parseWpsSubmission(obj) {
+  const flat = {};
+  (function walk(o, p) {
+    if (o && typeof o === 'object' && !Array.isArray(o)) {
+      Object.keys(o).forEach(k => walk(o[k], p ? p + '.' + k : k));
+    } else if (Array.isArray(o)) {
+      flat[p] = o.map(x => (x && typeof x === 'object') ? JSON.stringify(x) : String(x)).join('；');
+    } else {
+      flat[p] = o == null ? '' : String(o);
+    }
+  })(obj, '');
+
+  const keyHit = (re) => {
+    for (const k of Object.keys(flat)) if (re.test(k)) return flat[k];
+    return '';
+  };
+  // 按 key 找不到时，再按值的特征提取
+  const valHit = (re) => {
+    for (const k of Object.keys(flat)) {
+      const m = (flat[k] || '').match(re);
+      if (m) return m[0];
+    }
+    return '';
+  };
+
+  let name = keyHit(/姓名|名字|考生/i).trim();
+  let job = keyHit(/岗位|职位|应聘|求职|意向/i).trim();
+  const email = valHit(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
+  const phone = valHit(/1[3-9]\d{9}/);
+
+  // 值里带题干的情形（key 是字段 ID，值形如「姓名：李雷」）
+  if (!name) {
+    for (const k of Object.keys(flat)) {
+      const m = (flat[k] || '').match(/(?:姓名|名字)[：:\s]*([\u4e00-\u9fa5·]{2,4})/);
+      if (m) { name = m[1]; break; }
+    }
+  }
+  if (!job) {
+    for (const k of Object.keys(flat)) {
+      const m = (flat[k] || '').match(/(?:应聘岗位|应聘职位|岗位|职位|应聘|求职意向)[：:\s]*([^\s；;，,。]{2,20})/);
+      if (m) { job = m[1]; break; }
+    }
+  }
+  if (!name) {
+    for (const k of Object.keys(flat)) {
+      if (/^[\u4e00-\u9fa5·]{2,4}$/.test(flat[k])) { name = flat[k]; break; }
+    }
+  }
+  return { name: name.slice(0, 30), email, job: job.slice(0, 40), phone };
+}
+
+app.post('/api/wps-hook', async (req, res) => {
+  const body = req.body || {};
+  if (!body || typeof body !== 'object' || !Object.keys(body).length) {
+    return res.status(400).json({ error: '空数据' });
+  }
+  const parsed = parseWpsSubmission(body);
+  try {
+    const db = await getDb();
+    if (!db) return res.status(503).json({ error: '数据库暂不可用' });
+    const r = await db.collection('candidates').insertOne({
+      raw: body,
+      name: parsed.name, email: parsed.email, job: parsed.job, phone: parsed.phone,
+      submittedAt: new Date(),
+    });
+    console.log('[WPS-Hook] 新候选人入库:', parsed.name, parsed.email);
+    res.json({ ok: true, id: r.insertedId.toString(), parsed });
+  } catch (e) {
+    console.error('[WPS-Hook] 入库失败:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 已提交候选人列表（工具页「选用」按钮用）
+app.get('/api/candidates', auth, async (req, res) => {
+  try {
+    const db = await getDb();
+    if (!db) return res.json({ candidates: [] });
+    const list = await db.collection('candidates')
+      .find({}, { projection: { raw: 0 } })
+      .sort({ _id: -1 })
+      .limit(50)
+      .toArray();
+    res.json({ candidates: list.map(c => ({ ...c, _id: c._id.toString() })) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/smtpdiag', auth, async (req, res) => {

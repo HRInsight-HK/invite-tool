@@ -155,6 +155,17 @@
     </div>
   </div>
 
+  <!-- 已提交候选人（WPS 表单 Webhook 自动同步） -->
+  <div class="card">
+    <div class="card-head"><span class="dot"></span><h2>已提交候选人 <span style="font-weight:400;color:var(--gray);font-size:11px">采集表提交后自动同步</span>
+      <button class="btn-mini" style="margin-left:8px" onclick="loadCandidates()">刷新</button></h2></div>
+    <p style="font-size:12px;color:var(--gray);margin-top:2px">点「选用」自动填入下方表单（姓名 / 邮箱 / 岗位 / 手机）。</p>
+    <div class="logs"><table>
+      <thead><tr><th>提交时间</th><th>姓名</th><th>应聘岗位</th><th>邮箱 / 手机</th><th></th></tr></thead>
+      <tbody id="candBody"><tr><td colspan="5" class="muted">加载中…</td></tr></tbody>
+    </table></div>
+  </div>
+
   <div class="cols">
     <!-- 左：表单 -->
     <div class="card">
@@ -218,7 +229,7 @@
           <button class="btn btn-outline" onclick="copyCurrent()">复制全文</button>
         </div>
         <div class="msg" id="sendMsg"></div>
-        <p style="font-size:11.5px;color:var(--gray);margin-top:6px">发件人：人力资源部 &lt;HR_Support@insightelectionhk.com&gt; · 由云端服务直接发送</p>
+        <p style="font-size:11.5px;color:var(--gray);margin-top:6px">发件人：人力资源部 &lt;onboarding@resend.dev&gt; · 候选人回复会投到 HR_Support 邮箱</p>
       </div>
 
       <div class="card">
@@ -267,7 +278,7 @@ async function doLogin() {
 function enterMain() {
   document.getElementById('loginView').style.display = 'none';
   document.getElementById('mainView').style.display = 'block';
-  loadLogs(); schedulePreview();
+  loadLogs(); loadCandidates(); schedulePreview();
 }
 
 if (TOKEN) {
@@ -371,6 +382,50 @@ function copyText(t, tip) {
 function fallbackCopy(t, done) {
   const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta);
   ta.select(); try { document.execCommand('copy'); } catch (e) {} document.body.removeChild(ta); done();
+}
+
+// ===== 候选人列表（WPS 表单自动同步） =====
+let CANDS = [];
+async function loadCandidates() {
+  try {
+    const r = await fetch(API + '/api/candidates', { headers: { 'Authorization': 'Bearer ' + TOKEN } });
+    const d = await r.json();
+    const tb = document.getElementById('candBody');
+    if (!r.ok) { tb.innerHTML = '<tr><td colspan="5" class="muted">加载失败</td></tr>'; return; }
+    CANDS = d.candidates || [];
+    if (!CANDS.length) {
+      tb.innerHTML = '<tr><td colspan="5" class="muted">暂无提交（绑定 WPS 表单 Webhook 后，候选人提交即自动出现在这里）</td></tr>';
+      return;
+    }
+    tb.innerHTML = CANDS.map((c, i) => `<tr>
+      <td class="muted">${fmtTime(c.submittedAt)}</td>
+      <td>${esc(c.name || '—')}</td>
+      <td>${esc(c.job || '—')}</td>
+      <td>${esc(c.email || c.phone || '—')}</td>
+      <td><button class="btn-mini" onclick="useCandidate(${i})">选用</button></td></tr>`).join('');
+  } catch (e) {
+    document.getElementById('candBody').innerHTML = '<tr><td colspan="5" class="muted">加载失败</td></tr>';
+  }
+}
+
+function fmtTime(t) {
+  if (!t) return '—';
+  return String(t).replace('T', ' ').slice(5, 16);
+}
+
+function useCandidate(i) {
+  const c = CANDS[i] || {};
+  if (c.name) setVal('name', c.name);
+  if (c.email) setVal('email', c.email);
+  if (c.job) setVal('job', c.job);
+  if (c.phone) { setVal('phone', c.phone); if (!val('contact')) setVal('contact', c.name || ''); }
+  onInput();
+  document.getElementById('name').focus();
+}
+
+function setVal(id, v) {
+  const el = document.getElementById(id);
+  if (el) { el.value = v; }
 }
 
 // ===== 记录 =====
