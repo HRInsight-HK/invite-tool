@@ -13,7 +13,7 @@ const { buildEmail, buildHtml } = require('./lib/email-builder');
 const { sendMail, smtpConfigured } = require('./lib/mailer');
 const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
 
-const DEPLOY_TAG = 'hook-v2';
+const DEPLOY_TAG = 'hook-v3';
 const { enqueue, listPending } = require('./lib/queue');
 
 const app = express();
@@ -223,11 +223,10 @@ async function auditHook(req, kind) {
   } catch (e) { console.error('[WPS-Hook] audit err:', e.message); }
 }
 
-// bind_code 响应：纯数字校验码返回数字 JSON（避免 Number 精度丢失，手拼原文）
+// bind_code 响应：WPS 期望的格式是 {"bind_code":"<校验码>"}（字符串带引号）
 function respondBindCode(res, code) {
-  const raw = /^\d+$/.test(code) ? code : JSON.stringify(code);
   res.set('Content-Type', 'application/json; charset=utf-8');
-  res.send('{"bind_code":' + raw + '}');
+  res.send('{"bind_code":' + JSON.stringify(code) + '}');
 }
 
 app.get('/api/wps-hook', async (req, res) => {
@@ -296,6 +295,15 @@ function parseWpsSubmission(obj) {
 app.post('/api/wps-hook', async (req, res) => {
   const body = req.body || {};
   const bodyKeys = (body && typeof body === 'object') ? Object.keys(body) : [];
+
+  // WPS 绑定请求特征：body.event === 'bind'（来自审计日志 2026-08-31）
+  if (body.event === 'bind') {
+    await auditHook(req, 'bind-event');
+    const qCode = (req.query.c || req.query.bind_code || req.query.code || '').toString();
+    const bCode = String(body.rid || body.bind_code || body.code || '').trim();
+    const code = (qCode || bCode || 'unknown').toString();
+    return respondBindCode(res, code);
+  }
 
   // 校验请求识别：空 body，或 body 只含 bind_code/code 类字段 → 响应校验码
   const qCode = (req.query.c || req.query.bind_code || req.query.code || '').toString();
