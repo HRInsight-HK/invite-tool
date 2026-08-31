@@ -13,7 +13,7 @@ const { buildEmail, buildHtml } = require('./lib/email-builder');
 const { sendMail, smtpConfigured } = require('./lib/mailer');
 const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
 
-const DEPLOY_TAG = 'brevo-v1';
+const DEPLOY_TAG = 'hook-v2';
 const { enqueue, listPending } = require('./lib/queue');
 
 const app = express();
@@ -31,6 +31,7 @@ function checkRate() {
 function bumpRate() { counter.count += 1; }
 
 app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 function auth(req, res, next) {
@@ -199,18 +200,45 @@ app.get('/api/queue', auth, async (req, res) => {
 // ===== WPS 表单 Webhook（候选人数据自动同步，2026-08-31）=====
 // 绑定方式：WPS 表单 → 设置 → 提交表单后 → 数据推送(Webhook)
 //   URL 填 https://invite-tool.onrender.com/api/wps-hook?c=<校验码>
-//   <校验码> = WPS 弹窗里显示的 bind_code（弹窗里有「复制」按钮）
-// WPS 校验时会 GET 该地址，这里返回 {"bind_code": <校验码>} 即绑定成功；
+// WPS 点「校验并绑定」时会请求该地址，接收方返回 bind_code JSON 后绑定生效；
 // 绑定后每次有人提交表单，WPS 会 POST 提交数据到这里，自动入库。
+// 2026-08-31 v2：① 审计日志（记录 WPS 发来的一切请求，便于诊断协议）
+//   ② bind_code 纯数字时返回数字类型 JSON（WPS 界面校验码是数字串）
+//   ③ POST 也响应校验（防 WPS 校验走 POST）
 
-app.get('/api/wps-hook', (req, res) => {
+// 审计：把进到 /api/wps-hook 的原始请求记入 wps_hook_log 集合（诊断用）
+async function auditHook(req, kind) {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const xHeaders = {};
+    Object.keys(req.headers || {}).forEach(k => {
+      if (k.startsWith('x-') || /content-type|user-agent/.test(k)) xHeaders[k] = req.headers[k];
+    });
+    await db.collection('wps_hook_log').insertOne({
+      kind, method: req.method, url: req.originalUrl,
+      headers: xHeaders, query: req.query,
+      body: req.body, at: new Date(),
+    });
+  } catch (e) { console.error('[WPS-Hook] audit err:', e.message); }
+}
+
+// bind_code 响应：纯数字校验码返回数字 JSON（避免 Number 精度丢失，手拼原文）
+function respondBindCode(res, code) {
+  const raw = /^\d+$/.test(code) ? code : JSON.stringify(code);
+  res.set('Content-Type', 'application/json; charset=utf-8');
+  res.send('{"bind_code":' + raw + '}');
+}
+
+app.get('/api/wps-hook', async (req, res) => {
+  await auditHook(req, 'verify-get');
   const code = (req.query.c || req.query.bind_code || req.query.code || '').toString();
   if (!code) {
     return res.status(400).json({
       error: '缺少校验码：URL 需为 /api/wps-hook?c=<WPS弹窗里显示的bind_code>',
     });
   }
-  res.json({ bind_code: code });
+  respondBindCode(res, code);
 });
 
 // 从 WPS 推送的 JSON 里模糊提取关键字段（推送字段名不固定，按 key/值特征识别）
@@ -267,7 +295,20 @@ function parseWpsSubmission(obj) {
 
 app.post('/api/wps-hook', async (req, res) => {
   const body = req.body || {};
-  if (!body || typeof body !== 'object' || !Object.keys(body).length) {
+  const bodyKeys = (body && typeof body === 'object') ? Object.keys(body) : [];
+
+  // 校验请求识别：空 body，或 body 只含 bind_code/code 类字段 → 响应校验码
+  const qCode = (req.query.c || req.query.bind_code || req.query.code || '').toString();
+  const bCode = bodyKeys.some(k => /bind[_-]?code|code|echo|verify|challenge/i.test(k))
+    ? String(body[bodyKeys.find(k => /bind[_-]?code|code/i.test(k))] || '') : '';
+  const looksVerify = bodyKeys.length === 0 || /bind[_-]?code|echo|verify|challenge/i.test(bodyKeys.join('|'));
+  if (looksVerify && (qCode || bCode)) {
+    await auditHook(req, 'verify-post');
+    return respondBindCode(res, (qCode || bCode).toString());
+  }
+
+  await auditHook(req, 'data');
+  if (!bodyKeys.length) {
     return res.status(400).json({ error: '空数据' });
   }
   const parsed = parseWpsSubmission(body);
@@ -298,6 +339,20 @@ app.get('/api/candidates', auth, async (req, res) => {
       .limit(50)
       .toArray();
     res.json({ candidates: list.map(c => ({ ...c, _id: c._id.toString() })) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// WPS hook 审计日志（诊断绑定/推送问题用）
+app.get('/api/wps-log', auth, async (req, res) => {
+  try {
+    const db = await getDb();
+    if (!db) return res.json({ logs: [] });
+    const list = await db.collection('wps_hook_log')
+      .find({}, { projection: { headers: 0 } })
+      .sort({ _id: -1 })
+      .limit(50)
+      .toArray();
+    res.json({ logs: list.map(l => ({ ...l, _id: l._id.toString(), at: l.at instanceof Date ? l.at.toISOString() : l.at })) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
