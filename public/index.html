@@ -402,7 +402,7 @@ async function loadCandidates() {
       <td>${esc(c.name || '—')}</td>
       <td>${esc(c.job || '—')}</td>
       <td>${esc(c.email || c.phone || '—')}</td>
-      <td><button class="btn-mini" onclick="useCandidate(${i})">选用</button></td></tr>`).join('');
+      <td><button class="btn-mini" onclick="useCandidate(${i})">选用</button> <button class="btn-mini" style="color:#c0392b" title="删除这条记录" onclick="delCandidate('${esc(c._id)}')">✕</button></td></tr>`).join('');
   } catch (e) {
     document.getElementById('candBody').innerHTML = '<tr><td colspan="5" class="muted">加载失败</td></tr>';
   }
@@ -411,6 +411,16 @@ async function loadCandidates() {
 function fmtTime(t) {
   if (!t) return '—';
   return String(t).replace('T', ' ').slice(5, 16);
+}
+
+async function delCandidate(id) {
+  if (!confirm('确定删除这条候选人记录？')) return;
+  try {
+    const r = await fetch(API + '/api/candidates/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + TOKEN } });
+    const d = await r.json();
+    if (!r.ok || !d.ok) { alert('删除失败：' + (d.error || '')); return; }
+    loadCandidates();
+  } catch (e) { alert('删除失败：' + e.message); }
 }
 
 function useCandidate(i) {

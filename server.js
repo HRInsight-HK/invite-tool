@@ -13,7 +13,7 @@ const { buildEmail, buildHtml } = require('./lib/email-builder');
 const { sendMail, smtpConfigured } = require('./lib/mailer');
 const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
 
-const DEPLOY_TAG = 'hook-v4';
+const DEPLOY_TAG = 'hook-v5';
 const { enqueue, listPending } = require('./lib/queue');
 
 const app = express();
@@ -364,6 +364,19 @@ app.get('/api/candidates', auth, async (req, res) => {
       .limit(50)
       .toArray();
     res.json({ candidates: list.map(c => ({ ...c, _id: c._id.toString() })) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 删除一条候选人记录（清理测试/垃圾数据）
+app.delete('/api/candidates/:id', auth, async (req, res) => {
+  try {
+    if (!/^[0-9a-f]{24}$/i.test(req.params.id)) {
+      return res.status(400).json({ error: '无效 id' });
+    }
+    const db = await getDb();
+    if (!db) return res.status(503).json({ error: '数据库暂不可用' });
+    const r = await db.collection('candidates').deleteOne({ _id: new ObjectId(req.params.id) });
+    res.json({ ok: true, deleted: r.deletedCount });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
