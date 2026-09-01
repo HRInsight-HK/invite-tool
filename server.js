@@ -24,8 +24,23 @@ const { smtpConfigured } = require('./lib/mailer');
 const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
 const T = require('./lib/talents');
 
-const DEPLOY_TAG = 'talent-ledger-v1';
+const DEPLOY_TAG = 'talent-ledger-v2';
 const { enqueue, workerStatus } = require('./lib/queue');
+
+// ===== 进程级异常兜底：记录但不退出（Render 免费层崩了要等重启，先保命再排查）=====
+const ERRLOG = [];
+function logErr(where, e) {
+  const item = {
+    at: new Date().toISOString(), where,
+    msg: e && e.message ? e.message : String(e),
+    stack: String((e && e.stack) || '').slice(0, 1500),
+  };
+  ERRLOG.unshift(item);
+  if (ERRLOG.length > 30) ERRLOG.pop();
+  console.error(`[${where}]`, e);
+}
+process.on('uncaughtException', (e) => logErr('uncaughtException', e));
+process.on('unhandledRejection', (e) => logErr('unhandledRejection', e));
 
 const app = express();
 const PORT = process.env.PORT || 8788;
@@ -449,6 +464,11 @@ app.get('/api/wps-log', auth, async (req, res) => {
 // 阶段定义（前端渲染下拉用）
 app.get('/api/meta', auth, (req, res) => {
   res.json({ stages: T.STAGES, stageKeys: T.STAGE_KEYS, funnelSteps: T.FUNNEL_STEPS });
+});
+
+// 进程错误日志（排查线上崩溃用，保留最近 30 条）
+app.get('/api/errors', auth, (req, res) => {
+  res.json({ errors: ERRLOG });
 });
 
 // 漏斗统计
