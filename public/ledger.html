@@ -499,7 +499,8 @@ async function loadInvites() {
 // ===== 漏斗渲染 =====
 function renderFunnel() {
   const f = state.funnel; if (!f) return;
-  const totals = f.totals || [];
+  // 漏斗从「获得简历」开始：过滤掉与首层人数重复的「总候选人」行，避免顶部出现等宽直筒
+  const totals = (f.totals || []).filter(t => t.key !== 'total');
   document.getElementById('funnelRows').innerHTML = totals.length ? buildFunnelSvg(totals) : '';
 
   const jobs = (f.byJob || []).filter(j => j.resumes > 0);
