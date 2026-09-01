@@ -93,6 +93,28 @@
   .f-jobs td { padding: 5px 10px; border-bottom: 1px solid #F0E3E6; color: #4A4A4A; }
   .f-jobs td b { color: var(--ink); }
 
+  /* ===== 数据分析区 ===== */
+  .a-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .a-card { background: var(--pink-pale); border-left: 4px solid var(--pink-deep); border-radius: 4px; padding: 12px 16px; }
+  .a-card h4 { font-size: 13px; font-weight: 700; margin-bottom: 9px; display: flex; align-items: center; gap: 7px; }
+  .a-card h4 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pink-deep); }
+  .a-row { display: grid; grid-template-columns: 82px 1fr 44px; gap: 8px; align-items: center; margin-bottom: 5px; font-size: 12px; }
+  .a-row .lb { color: #4A4A4A; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .a-row .tr { background: #fff; border: 1px solid #F0E3E6; border-radius: 3px; height: 14px; overflow: hidden; }
+  .a-row .bar { display: block; height: 100%; background: linear-gradient(90deg, var(--pink-soft), var(--pink-deep)); border-radius: 3px; }
+  .a-row .n { color: var(--ink); font-weight: 700; text-align: right; }
+  .a-note { font-size: 11px; color: #999; margin-top: 4px; }
+
+  /* ===== 面试结果快捷操作 ===== */
+  .qr-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .qr-row:last-child { margin-bottom: 0; }
+  .qr-tag { font-size: 12px; font-weight: 700; color: var(--pink-deep); background: var(--pink-light); border-radius: 3px; padding: 3px 11px; }
+  .btn-mini.ok { color: #2E7D4F; border-color: #BFE0CC; }
+  .btn-mini.ok:hover { background: #E8F4EC; }
+  .btn-mini.danger { color: #B03A28; border-color: #E5B8B0; }
+  .btn-mini.danger:hover { background: #FDECEA; }
+  .badge.star { background: #FFF7E0; color: #B07C10; }
+
   /* 阶段 chips */
   .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
   .chip {
@@ -242,6 +264,8 @@
       <div class="f-jobs" id="funnelJobs"></div>
     </div>
 
+    <div class="a-grid" id="analyticsBox"></div>
+
     <div class="chips" id="stageChips"></div>
 
     <div class="ledger">
@@ -305,8 +329,13 @@
     <div class="fi"><label>渠道</label><input id="n_channel" type="text" placeholder="boss直聘 / 猎聘 / 推荐…"></div>
     <div class="fi"><label>邮箱（发邀约用）</label><input id="n_email" type="text"></div>
     <div class="fi"><label>电话</label><input id="n_phone" type="text"></div>
-    <div class="fi full"><label>简历文件（PDF/Word/图片，选填；上传后由 AI 助手识别补充信息）</label>
-      <input id="n_resume" type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.wps">
+    <div class="fi"><label>性别</label><input id="n_gender" type="text"></div>
+    <div class="fi"><label>年龄</label><input id="n_age" type="text"></div>
+    <div class="fi"><label>学历 / 专业</label><input id="n_education" type="text" placeholder="如：本科 · 电子商务"></div>
+    <div class="fi"><label>期望薪资</label><input id="n_expectSalary" type="text"></div>
+    <div class="fi full"><label>工作经验</label><input id="n_experience" type="text" placeholder="如：3年工作经验 / 应届毕业生"></div>
+    <div class="fi full"><label>简历文件（PDF / Word / 图片，选填；PDF、DOCX 选定后 AI 自动识别填充信息）</label>
+      <input id="n_resume" type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.wps" onchange="aiParseResume(this)">
     </div>
   </div>
   <div class="msg" id="newMsg"></div>
@@ -376,10 +405,11 @@ const STAGE_COLORS = {
 
 const state = {
   page: 1, pageSize: 100, total: 0,
-  talents: [], funnel: null, jobs: [],
+  talents: [], funnel: null, jobs: [], analytics: null,
   wpsMap: {},   // name -> {at, email, phone, job}
   inviteMap: {},// name -> count
   curId: null, cur: null,
+  aiParsed: false, // 本次新增是否经 AI 识别预填
 };
 
 const esc = (s) => String(s == null ? '' : s)
@@ -440,8 +470,15 @@ async function api(path, opts = {}) {
 }
 
 async function loadAll() {
-  await Promise.all([loadFunnel(), loadJobs(), loadWps(), loadInvites()]);
+  await Promise.all([loadFunnel(), loadJobs(), loadWps(), loadInvites(), loadAnalytics()]);
   await loadTalents();
+}
+
+async function loadAnalytics() {
+  try {
+    state.analytics = await api('/api/analytics');
+    renderAnalytics();
+  } catch (e) { console.error(e); }
 }
 
 async function loadTalents() {
@@ -559,6 +596,32 @@ function buildFunnelSvg(totals) {
   return `<svg class="f-svg" viewBox="0 0 ${W} ${y + 40}" role="img" aria-label="招聘漏斗图">${s}</svg>`;
 }
 
+// ===== 数据分析区渲染 =====
+function renderAnalytics() {
+  const a = state.analytics, el = document.getElementById('analyticsBox');
+  if (!a || !el) return;
+  const bars = (rows, max) => rows.map(r => `
+    <div class="a-row">
+      <span class="lb" title="${esc(r.label)}">${esc(r.label)}</span>
+      <span class="tr"><span class="bar" style="width:${Math.max(2, Math.round(r.count / max * 100))}%"></span></span>
+      <span class="n">${r.count}</span>
+    </div>`).join('');
+  const card = (title, rows) => {
+    const rs = rows || [];
+    const max = Math.max(...rs.map(r => r.count), 1);
+    return `<div class="a-card"><h4><span class="dot"></span>${title}</h4>${rs.length ? bars(rs, max) : '<div class="a-note">暂无数据</div>'}</div>`;
+  };
+  const EDU_ORDER = ['博士', '硕士', '本科', '大专', '高中及以下', '未填写'];
+  const EXP_ORDER = ['应届生', '1-2年', '3-4年', '5-9年', '10年以上', '其他', '未填写'];
+  const byOrder = (rows, order) => (rows || []).slice().sort((x, y) => order.indexOf(x.label) - order.indexOf(y.label));
+  el.innerHTML = `
+    ${card('来源分布', (a.source || []).slice(0, 6))}
+    ${card('学历分布', byOrder(a.education, EDU_ORDER))}
+    ${card('工作经验分布', byOrder(a.experience, EXP_ORDER))}
+    ${card('月度新增候选人', (a.monthly || []).slice(-12))}
+    <div class="a-note" style="grid-column:1/-1">口径：共 ${a.total || 0} 位候选人 · 历史导入数据记于导入日（2026-09）· 随台账实时更新</div>`;
+}
+
 function renderChips() {
   const f = state.funnel; if (!f) return;
   const cur = document.getElementById('stageFilter').value;
@@ -610,6 +673,7 @@ function renderTable() {
           ${t.resumeFileId ? '📄' : ''}
           ${wps ? '<span class="badge wps" title="已提交 WPS 信息采集表">表</span>' : ''}
           ${inv ? '✉' + inv : ''}
+          ${t.flag === 'potential' ? '<span class="badge star" title="面试待定 · 有机会">有机会</span>' : ''}
         </td>
         <td class="ops">
           <button class="btn-mini" onclick="openDrawer('${t._id}')">详情</button>
@@ -634,6 +698,24 @@ async function quickStage(id, stage) {
     await api(`/api/talents/${id}/stage`, { method: 'POST', body: JSON.stringify({ stage, note }) });
     await Promise.all([loadTalents(), loadFunnel()]);
   } catch (e) { alert('流转失败：' + e.message); loadTalents(); }
+}
+
+// 面试结果快捷记录（一面/二面 × 通过/有机会/未通过）
+async function recordResult(round, result) {
+  if (!state.curId) return;
+  const labels = { pass: '通过', fail: '不通过', potential: '待定（有机会）' };
+  const next = {
+    1: { pass: '待约二面', fail: '已淘汰', potential: '一面完成·待定' },
+    2: { pass: '录用·待入职', fail: '已淘汰', potential: '二面完成·待定' },
+  };
+  const note = gv('d_note') || '';
+  const go = confirm(`确认记录「${round === 1 ? '一面' : '二面'} · ${labels[result]}」？\n阶段将变为：${next[round][result]}${note ? '\n备注：' + note : ''}`);
+  if (!go) return;
+  try {
+    await api(`/api/talents/${state.curId}/interview-result`, { method: 'POST', body: JSON.stringify({ round, result, note }) });
+    await openDrawer(state.curId);
+    await Promise.all([loadTalents(), loadFunnel(), loadAnalytics()]);
+  } catch (e) { alert('记录失败：' + e.message); }
 }
 
 // ===== 详情抽屉 =====
@@ -675,6 +757,23 @@ async function openDrawer(id) {
           <div class="tli"><b>${esc(STAGES[h.stage] ? STAGES[h.stage].label : h.stage)}</b>${h.note ? '：' + esc(h.note) : ''}<span class="t">${esc(fmtDT(h.at))}${h.by ? ' · ' + esc(h.by) : ''}</span></div>
         `).join('') || '<div class="tli">暂无记录</div>'}
       </div>
+    </div>
+
+    <div class="sec">
+      <h4>面试结果快捷记录</h4>
+      <div class="qr-row">
+        <span class="qr-tag">一面</span>
+        <button class="btn-mini ok" onclick="recordResult(1,'pass')">✓ 通过 → 待约二面</button>
+        <button class="btn-mini" onclick="recordResult(1,'potential')">☆ 有机会 · 待定</button>
+        <button class="btn-mini danger" onclick="recordResult(1,'fail')">✕ 未通过</button>
+      </div>
+      <div class="qr-row">
+        <span class="qr-tag">二面</span>
+        <button class="btn-mini ok" onclick="recordResult(2,'pass')">✓ 通过 → 录用</button>
+        <button class="btn-mini" onclick="recordResult(2,'potential')">☆ 有机会 · 待定</button>
+        <button class="btn-mini danger" onclick="recordResult(2,'fail')">✕ 未通过</button>
+      </div>
+      <div class="a-note">备注可写在上方「流转备注」框；「有机会」会在列表标记 ☆，通过/未通过后自动消除</div>
     </div>
 
     <div class="sec">
@@ -872,7 +971,9 @@ async function submitNew() {
   const body = {
     name, jobTitle: gv('n_job'), dept: gv('n_dept'), recruiter: gv('n_recruiter'),
     source: gv('n_source'), channel: gv('n_channel'), email: gv('n_email'), phone: gv('n_phone'),
-    stage: 'resume',
+    gender: gv('n_gender'), age: gv('n_age'), education: gv('n_education'),
+    expectSalary: gv('n_expectSalary'), experience: gv('n_experience'),
+    stage: 'resume', aiParsed: state.aiParsed,
   };
   try {
     if (file) {
@@ -885,9 +986,44 @@ async function submitNew() {
     }
     msg.className = 'msg'; msg.textContent = '保存中…';
     await api('/api/talents', { method: 'POST', body: JSON.stringify(body) });
+    state.aiParsed = false;
     closeNewModal();
-    await Promise.all([loadTalents(), loadFunnel()]);
+    await Promise.all([loadTalents(), loadFunnel(), loadAnalytics()]);
   } catch (e) { msg.className = 'msg err'; msg.textContent = '保存失败：' + e.message; }
+}
+
+// ===== 简历 AI 识别：选定文件后自动解析预填 =====
+async function aiParseResume(input) {
+  const file = input.files && input.files[0];
+  const msg = document.getElementById('newMsg');
+  if (!file) return;
+  const ext = file.name.toLowerCase().split('.').pop();
+  if (!['pdf', 'docx', 'txt'].includes(ext)) {
+    msg.className = 'msg';
+    msg.textContent = `已选择 ${ext.toUpperCase()} 文件（仅存档）。AI 识别支持 PDF / DOCX / TXT，其余格式请手动填写`;
+    return;
+  }
+  if (file.size > 12 * 1024 * 1024) return; // 保存时再报错，这里不重复提示
+  msg.className = 'msg'; msg.textContent = '🤖 AI 正在识别简历内容…';
+  try {
+    const dataBase64 = await fileToBase64(file);
+    const d = await api('/api/resume/parse', { method: 'POST', body: JSON.stringify({ filename: file.name, dataBase64 }) });
+    const map = {
+      name: 'n_name', jobTitle: 'n_job', email: 'n_email', phone: 'n_phone',
+      gender: 'n_gender', age: 'n_age', education: 'n_education',
+      expectSalary: 'n_expectSalary', experience: 'n_experience',
+    };
+    let filled = 0;
+    for (const [k, elId] of Object.entries(map)) {
+      if (d.fields && d.fields[k] && !gv(elId)) { document.getElementById(elId).value = d.fields[k]; filled++; }
+    }
+    if (filled) state.aiParsed = true;
+    msg.className = 'msg ok';
+    msg.textContent = `🤖 AI 已识别 ${d.matched} 项、自动填入 ${filled} 项空缺，请核对后保存`;
+  } catch (e) {
+    msg.className = 'msg err';
+    msg.textContent = 'AI 识别失败：' + e.message + '（文件仍会存档，请手动填写）';
+  }
 }
 
 // ===== 岗位管理 =====

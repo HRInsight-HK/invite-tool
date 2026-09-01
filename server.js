@@ -12,6 +12,11 @@
 //   /api/jobs*（岗位库：JD/HC/优先级/BOSS 渠道数据）
 //   /api/funnel（招聘漏斗统计：简历→有效→一面→二面→录用→入职）
 //   /api/meta（阶段定义）
+//   POST /api/resume/parse（简历 AI 识别：PDF/DOCX/TXT → 结构化字段预填）
+//   POST /api/talents/:id/interview-result（面试结果快捷记录：通过/不通过/有机会）
+//   GET  /api/analytics（招聘数据分析：来源/学历/经验/月度分布）
+//   POST /api/wps-backfill（历史 WPS 问卷一次性回填台账）
+//   WPS hook 新提交自动同步 talents；邀约发送自动联动候选人历史记录
 //
 // 2026-09-01 重大变更：发送一律走本地 worker（用户要求发件人必须是 HR_Support@insightelectionhk.com）。
 //   Brevo/Gmail 云端直发已停用（Gmail 显示名是代发、域名认证走不通）；worker 离线时入队照常，
@@ -24,7 +29,7 @@ const { smtpConfigured } = require('./lib/mailer');
 const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
 const T = require('./lib/talents');
 
-const DEPLOY_TAG = 'funnel-shape-v2';
+const DEPLOY_TAG = 'ledger-ai-v1';
 const { enqueue, workerStatus } = require('./lib/queue');
 
 // ===== 进程级异常兜底：记录但不退出（Render 免费层崩了要等重启，先保命再排查）=====
@@ -206,6 +211,13 @@ app.post('/api/send', auth, async (req, res) => {
       },
     });
     bumpRate();
+    // 台账联动：匹配到的候选人自动追加「邀约已发送」历史记录（不自动改阶段，避免一面/二面误判）
+    T.linkInvite({
+      name: (data.name || '').trim(), email: (data.email || '').trim(), phone: (data.phone || '').trim(),
+    }, {
+      jobTitle: (data.job || '').trim(), mode: data.mode === 'online' ? '线上' : '线下',
+      by: (data.operator || 'HR').trim() || 'HR',
+    }).catch(e => console.error('[Ledger] 邀约联动失败:', e.message));
     const ws = await workerStatus().catch(() => ({ alive: false }));
     await addLog({
       to: data.email,
@@ -371,7 +383,7 @@ function parseWpsSubmission(obj) {
       if (/^[\u4e00-\u9fa5·]{2,4}$/.test(flat[k])) { name = flat[k]; break; }
     }
   }
-  return { name: name.slice(0, 30), email, job: job.slice(0, 40), phone };
+  return { name: name.slice(0, 30), email, job: job.slice(0, 40), phone, flat };
 }
 
 app.post('/api/wps-hook', async (req, res) => {
@@ -411,7 +423,18 @@ app.post('/api/wps-hook', async (req, res) => {
       submittedAt: new Date(),
     });
     console.log('[WPS-Hook] 新候选人入库:', parsed.name, parsed.email);
-    res.json({ ok: true, id: r.insertedId.toString(), parsed });
+    // 自动同步进候选人台账（WPS 问卷 → talents：手机号/邮箱/姓名去重，命中补空缺，未命中新建档）
+    let ledger = null;
+    try {
+      ledger = await T.upsertFromWps({
+        ...parsed, flat: parsed.flat || {},
+        candidateId: r.insertedId.toString(), submittedAt: new Date(),
+      });
+      console.log('[WPS-Hook] 台账同步:', ledger.action, ledger.talentId || ledger.reason || '');
+    } catch (se) {
+      console.error('[WPS-Hook] 台账同步失败:', se.message); // 同步失败不影响问卷入库
+    }
+    res.json({ ok: true, id: r.insertedId.toString(), parsed: { name: parsed.name, email: parsed.email, job: parsed.job, phone: parsed.phone }, ledger });
   } catch (e) {
     console.error('[WPS-Hook] 入库失败:', e.message);
     res.status(500).json({ error: e.message });
@@ -608,6 +631,68 @@ app.post('/api/talents/:id/stage', auth, async (req, res) => {
 app.delete('/api/talents/:id', auth, async (req, res) => {
   try { res.json({ ok: true, deleted: await T.deleteTalent(req.params.id) }); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 面试结果快捷记录 { round: 1|2, result: pass|fail|potential, note, by }
+// pass=通过并推进阶段（一面→待约二面 / 二面→录用）fail=不通过→已淘汰 potential=待定+标记有机会
+app.post('/api/talents/:id/interview-result', auth, async (req, res) => {
+  try {
+    const t = await T.recordInterviewResult(req.params.id, req.body || {});
+    if (!t) return res.status(404).json({ error: '候选人不存在' });
+    res.json({ success: true, talent: t });
+  } catch (e) {
+    res.status(e.code === 'BAD_INPUT' ? 400 : 500).json({ error: e.message });
+  }
+});
+
+// 简历 AI 识别：上传文件（base64）→ 提取文本 → 规则解析 → 结构化字段（预填表单用）
+app.post('/api/resume/parse', auth, async (req, res) => {
+  try {
+    const { filename = '', dataBase64 = '' } = req.body || {};
+    if (!dataBase64) return res.status(400).json({ error: '缺少文件内容' });
+    const buf = Buffer.from(String(dataBase64), 'base64');
+    if (!buf.length) return res.status(400).json({ error: '文件内容为空' });
+    if (buf.length > 12 * 1024 * 1024) return res.status(400).json({ error: '简历文件超过 12MB' });
+    const RP = require('./lib/resume-parser');
+    const text = await RP.extractText(buf, filename);
+    if (!text || !text.trim()) {
+      return res.status(422).json({ error: '没能从文件里读到文字（可能是扫描件/图片型 PDF），请手动填写' });
+    }
+    res.json({ success: true, ...RP.parseResumeText(text) });
+  } catch (e) {
+    res.status(e.code === 'UNSUPPORTED' ? 415 : 500).json({ error: e.message });
+  }
+});
+
+// 招聘数据分析（来源/渠道/学历/工作经验/月度新增分布）
+app.get('/api/analytics', auth, async (req, res) => {
+  try { res.json(await T.analytics()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 一次性回填：历史 WPS 问卷提交 → 台账（幂等，按去重规则合并，不会重复建档）
+app.post('/api/wps-backfill', auth, async (req, res) => {
+  try {
+    const db = await getDb();
+    if (!db) return res.status(503).json({ error: '数据库暂不可用' });
+    const list = await db.collection('candidates').find({}).sort({ _id: 1 }).toArray();
+    const stats = { total: list.length, created: 0, merged: 0, skipped: 0, failed: 0 };
+    for (const c of list) {
+      try {
+        const parsed = parseWpsSubmission(c.raw || {});
+        if (!parsed.name) { stats.skipped++; continue; }
+        const r = await T.upsertFromWps({
+          ...parsed, flat: parsed.flat || {},
+          candidateId: c._id.toString(),
+          submittedAt: c.submittedAt || c._id.getTimestamp(),
+        });
+        if (r.action === 'created') stats.created++;
+        else if (r.action === 'merged') stats.merged++;
+        else stats.skipped++;
+      } catch (e) { stats.failed++; console.error('[Backfill] 单条失败:', e.message); }
+    }
+    res.json({ success: true, stats });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // 简历下载（<a> 标签无法带 header → 支持 ?t= 口令参数）
