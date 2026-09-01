@@ -29,7 +29,7 @@ const { smtpConfigured } = require('./lib/mailer');
 const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
 const T = require('./lib/talents');
 
-const DEPLOY_TAG = 'ledger-ai-v1';
+const DEPLOY_TAG = 'ledger-ai-v2';
 const { enqueue, workerStatus } = require('./lib/queue');
 
 // ===== 进程级异常兜底：记录但不退出（Render 免费层崩了要等重启，先保命再排查）=====
