@@ -229,7 +229,11 @@
           <button class="btn btn-outline" onclick="copyCurrent()">复制全文</button>
         </div>
         <div class="msg" id="sendMsg"></div>
-        <p style="font-size:11.5px;color:var(--gray);margin-top:6px">发件人：人力资源部 &lt;onboarding@resend.dev&gt; · 候选人回复会投到 HR_Support 邮箱</p>
+        <p style="font-size:11.5px;color:var(--gray);margin-top:6px">
+          <span id="workerDot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#B03A28;vertical-align:middle;margin-right:4px"></span>
+          <span id="workerText">发送通道检查中…</span><br>
+          发件人：人力资源部 &lt;HR_Support@insightelectionhk.com&gt;（本地 worker 真实发出，候选人回复直达此邮箱）
+        </p>
       </div>
 
       <div class="card">
@@ -278,7 +282,27 @@ async function doLogin() {
 function enterMain() {
   document.getElementById('loginView').style.display = 'none';
   document.getElementById('mainView').style.display = 'block';
-  loadLogs(); loadCandidates(); schedulePreview();
+  loadLogs(); loadCandidates(); schedulePreview(); loadWorkerStatus();
+  setInterval(loadWorkerStatus, 30000);  // 30s 刷新 worker 在线状态
+}
+
+// ===== 本地 worker 在线状态（发送通道） =====
+async function loadWorkerStatus() {
+  const dot = document.getElementById('workerDot');
+  const text = document.getElementById('workerText');
+  if (!dot || !text) return;
+  try {
+    const r = await fetch(API + '/api/health');
+    const d = await r.json();
+    const alive = !!(d.worker && d.worker.alive);
+    dot.style.background = alive ? '#3B6D11' : '#B03A28';
+    text.textContent = alive
+      ? '本地 worker 在线 · 发件人 HR_Support@insightelectionhk.com'
+      : '本地 worker 离线 · 发送前请先双击「启动云端worker.bat」';
+  } catch (e) {
+    dot.style.background = '#8C8C8C';
+    text.textContent = '发送通道状态未知（云端连不上）';
+  }
 }
 
 if (TOKEN) {
@@ -355,8 +379,19 @@ async function doSend() {
     });
     const res = await r.json();
     if (r.ok && res.success) {
-      msg.textContent = `✅ 已发送 · ${res.sender} · mailId ${res.messageId.slice(0, 18)}…`;
-      msg.className = 'msg ok';
+      if (res.queued) {
+        if (res.workerAlive) {
+          msg.textContent = '✅ 已入队 · 本地 worker 正在以 HR_Support@insightelectionhk.com 发出（几秒内送达）';
+          msg.className = 'msg ok';
+        } else {
+          msg.innerHTML = '⚠️ 已入队，但本地 worker 未运行——请在电脑上双击「<b>启动云端worker.bat</b>」，开启后自动发出';
+          msg.className = 'msg err';
+        }
+      } else {
+        msg.textContent = `✅ 已发送 · ${res.sender} · mailId ${(res.messageId || '').slice(0, 18)}…`;
+        msg.className = 'msg ok';
+      }
+      loadWorkerStatus();
       loadLogs();
     } else if (res.fallback === 'copy') {
       CURRENT = { subject: res.subject, body: res.body };

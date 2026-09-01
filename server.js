@@ -1,20 +1,24 @@
 // 面试邀约工具 · 云端服务（独立部署，不依赖实操台账）
 // 接口：
-//   GET  /api/health   健康检查
+//   GET  /api/health   健康检查（含本地 worker 心跳状态）
 //   POST /api/login    口令登录 { token }
 //   POST /api/preview  生成邮件预览 { 候选人+安排字段 }
-//   POST /api/send     入队（云端不入队）→ 本地 worker 消费调 wecom-cli 发送
+//   POST /api/send     入队 → 本地 worker 消费（wecom-cli 真发，发件人=HR_Support@insightelectionhk.com）
 //   GET  /api/logs     最近发送记录（含队列处理结果）
 //   GET  /api/queue    查看队列状态（pending/processing/done/failed）
+//
+// 2026-09-01 重大变更：发送一律走本地 worker（用户要求发件人必须是 HR_Support@insightelectionhk.com）。
+//   Brevo/Gmail 云端直发已停用（Gmail 显示名是代发、域名认证走不通）；worker 离线时入队照常，
+//   响应里提示先启动「启动云端worker.bat」，开启后自动补发。
 const express = require('express');
 const path = require('path');
 const { ObjectId } = require('mongodb');
-const { buildEmail, buildHtml } = require('./lib/email-builder');
-const { sendMail, smtpConfigured } = require('./lib/mailer');
+const { buildEmail } = require('./lib/email-builder');
+const { smtpConfigured } = require('./lib/mailer');
 const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
 
-const DEPLOY_TAG = 'brevo-final';
-const { enqueue, listPending } = require('./lib/queue');
+const DEPLOY_TAG = 'worker-first-v1';
+const { enqueue, workerStatus } = require('./lib/queue');
 
 const app = express();
 const PORT = process.env.PORT || 8788;
@@ -47,12 +51,17 @@ function auth(req, res, next) {
 
 app.get('/api/health', async (req, res) => {
   const db = await getDb();
+  let worker = null;
+  if (db) {
+    try { worker = await workerStatus(); } catch (_) { worker = null; }
+  }
   res.json({
     status: 'ok',
     service: 'invite-tool',
     tag: DEPLOY_TAG,
     smtpReady: smtpConfigured(),
     queueReady: !!db,
+    worker,
     db: dbDiag(),
     time: new Date().toISOString(),
   });
@@ -127,12 +136,11 @@ app.post('/api/preview', auth, (req, res) => {
 
 app.post('/api/send', auth, async (req, res) => {
   const data = req.body || {};
-  let subject, body, html;
+  let subject, body;
   try {
     const built = buildEmail(data);
     subject = built.subject;
     body = built.body;
-    html = buildHtml(built.ctx);
   } catch (e) {
     return res.status(400).json({ error: e.message });
   }
@@ -146,81 +154,64 @@ app.post('/api/send', auth, async (req, res) => {
     return res.status(429).json({ error: `今日发送已达上限（${DAILY_LIMIT} 封），请明天再试` });
   }
 
+  // 2026-09-01 起一律入队由本地 worker 发（发件人必须是 HR_Support@insightelectionhk.com），
+  // 不再云端直发（Brevo/Gmail 停用）。worker 离线时也入队（不丢数据），开启后自动补发。
   try {
-    // 优先 SMTP 直发（Resend 等云端可达的通道），失败才入队让本地 worker 兜底
-    const { messageId, from } = await sendMail({ to: data.email, subject, body, html });
-    bumpRate();
-
-    const log = {
+    const { id } = await enqueue({
       to: data.email,
       candidateName: (data.name || '').trim(),
       jobTitle: (data.job || '').trim(),
       mode: data.mode === 'online' ? 'online' : 'offline',
       subject,
+      body,
+      operator: (data.operator || 'HR').trim() || 'HR',
+      meta: {
+        date: data.date,
+        time: data.time,
+        duration: data.duration || '',
+        hr: data.contact || data.hr || '',
+        meetLink: data.meetLink || '',
+        meetId: data.meetId || '',
+        contact: data.contact || '',
+        phone: data.phone || '',
+        address: data.address || '',
+        access: data.access || '',
+        interviewers: data.interviewers || '',
+        deadline: data.deadline || '',
+        extra: data.extra || '',
+        attachPpt: !!data.attachPpt,
+      },
+    });
+    bumpRate();
+    const ws = await workerStatus().catch(() => ({ alive: false }));
+    await addLog({
+      to: data.email,
+      candidateName: data.name || '',
+      jobTitle: data.job || '',
+      mode: data.mode === 'online' ? 'online' : 'offline',
+      subject,
       sentBy: (data.operator || 'HR').trim() || 'HR',
       sentAt: new Date(),
-      messageId,
-      status: 'sent',
-      sender: from,
-    };
-    const stored = await addLog(log);
-
-    res.json({ success: true, sent: true, subject, messageId, stored, sender: from });
-  } catch (e) {
-    if (e.code === 'SMTP_NOT_CONFIGURED') {
-      return res.status(503).json({ error: e.message, subject, body, fallback: 'copy' });
+      status: 'queued',
+      queueId: id,
+    });
+    res.json({
+      success: true,
+      queued: true,
+      queueId: id,
+      subject,
+      workerAlive: !!ws.alive,
+      sender: 'HR_Support@insightelectionhk.com',
+      message: ws.alive
+        ? '已入队：本地 worker 正在以 HR_Support@insightelectionhk.com 发出（几秒内完成）'
+        : '已入队，但本地 worker 未运行——双击「启动云端worker.bat」，开启后自动发出',
+    });
+  } catch (qe) {
+    if (qe.code === 'QUEUE_UNAVAILABLE') {
+      return res.status(503).json({ error: qe.message, subject, body, fallback: 'copy' });
     }
-    console.error('[Send] SMTP 直发失败，转本地队列:', e.message);
-    try {
-      const { id } = await enqueue({
-        to: data.email,
-        candidateName: (data.name || '').trim(),
-        jobTitle: (data.job || '').trim(),
-        mode: data.mode === 'online' ? 'online' : 'offline',
-        subject,
-        body,
-        operator: (data.operator || 'HR').trim() || 'HR',
-        meta: {
-          date: data.date,
-          time: data.time,
-          meetLink: data.meetLink || '',
-          meetId: data.meetId || '',
-          contact: data.contact || '',
-          phone: data.phone || '',
-          address: data.address || '',
-          access: data.access || '',
-          interviewers: data.interviewers || '',
-          deadline: data.deadline || '',
-          attachPpt: !!data.attachPpt,
-        },
-      });
-      bumpRate();
-      await addLog({
-        to: data.email,
-        candidateName: data.name || '',
-        jobTitle: data.job || '',
-        mode: data.mode === 'online' ? 'online' : 'offline',
-        subject,
-        sentBy: (data.operator || 'HR').trim() || 'HR',
-        sentAt: new Date(),
-        status: 'queued',
-        queueId: id,
-      });
-      res.json({
-        success: true,
-        queued: true,
-        queueId: id,
-        subject,
-        smtpError: e.message,
-        message: 'SMTP 直发失败，已加入本地 worker 队列（你电脑开 worker 后自动发出）',
-      });
-    } catch (qe) {
-      if (qe.code === 'QUEUE_UNAVAILABLE') {
-        return res.status(503).json({ error: qe.message, subject, body, fallback: 'copy' });
-      }
-      console.error('[Send] 入队也失败:', qe.message);
-      res.status(500).json({ error: '发送失败：' + qe.message });
-    }
+    console.error('[Send] 入队失败:', qe.message);
+    res.status(500).json({ error: '发送失败：' + qe.message });
   }
 });
 
@@ -485,8 +476,7 @@ app.get('/api/smtpdiag', auth, async (req, res) => {
 
 const server = app.listen(PORT, () => {
   console.log(`[invite-tool] listening on :${PORT}`);
-  console.log(`  SMTP: ${smtpConfigured() ? '已配置' : '未配置'}`);
-  console.log(`  队列: SMTP 失败时回退到本地 worker（通过 wecom-cli 真发）`);
+  console.log(`  通道: 一律本地 worker 发（wecom-cli，发件人 HR_Support@insightelectionhk.com）`);
   console.log(`  口令: ${ACCESS_TOKEN ? '已配置' : '未配置（登录不可用）'}`);
 });
 
