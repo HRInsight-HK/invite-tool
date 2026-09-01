@@ -143,6 +143,9 @@
     <h1>面试邀约工具</h1>
     <div class="dots"><i></i><i></i><i></i></div>
     <p class="sub-en">HR&nbsp;INTERNAL&nbsp;·&nbsp;CLOUD&nbsp;EDITION</p>
+    <div style="margin-top:12px">
+      <a href="ledger.html" style="font-size:12.5px;color:var(--pink-deep);text-decoration:none;border:1px solid #E9D5DA;border-radius:3px;padding:5px 16px;background:#fff;display:inline-block">候选人管理台账 →</a>
+    </div>
   </div>
 
   <!-- 采集表链接 -->
@@ -284,7 +287,22 @@ function enterMain() {
   document.getElementById('loginView').style.display = 'none';
   document.getElementById('mainView').style.display = 'block';
   loadLogs(); loadCandidates(); schedulePreview(); loadWorkerStatus();
+  prefillFromUrl();
   setInterval(loadWorkerStatus, 30000);  // 30s 刷新 worker 在线状态
+}
+
+// 台账页跳转预填（ledger.html「发面试邀约」按钮带参打开本页）
+function prefillFromUrl() {
+  const p = new URLSearchParams(location.search);
+  const setV = (id, v) => { if (v) { const el = document.getElementById(id); if (el) el.value = v; } };
+  setV('name', p.get('name'));
+  setV('email', p.get('email'));
+  setV('job', p.get('job'));
+  setV('phone', p.get('phone'));
+  setV('date', p.get('date'));
+  setV('time', p.get('time'));
+  if (p.get('mode') === 'online' || p.get('mode') === 'offline') setMode(p.get('mode'));
+  if (p.get('name')) schedulePreview();
 }
 
 // ===== 本地 worker 在线状态（发送通道） =====

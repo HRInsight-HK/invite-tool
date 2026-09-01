@@ -7,6 +7,12 @@
 //   GET  /api/logs     最近发送记录（含队列处理结果）
 //   GET  /api/queue    查看队列状态（pending/processing/done/failed）
 //
+// 2026-09-01 候选人管理台账（/ledger.html）：
+//   /api/talents*（候选人 CRUD+阶段流转+简历 GridFS 入库+CSV 导出）
+//   /api/jobs*（岗位库：JD/HC/优先级/BOSS 渠道数据）
+//   /api/funnel（招聘漏斗统计：简历→有效→一面→二面→录用→入职）
+//   /api/meta（阶段定义）
+//
 // 2026-09-01 重大变更：发送一律走本地 worker（用户要求发件人必须是 HR_Support@insightelectionhk.com）。
 //   Brevo/Gmail 云端直发已停用（Gmail 显示名是代发、域名认证走不通）；worker 离线时入队照常，
 //   响应里提示先启动「启动云端worker.bat」，开启后自动补发。
@@ -16,8 +22,9 @@ const { ObjectId } = require('mongodb');
 const { buildEmail } = require('./lib/email-builder');
 const { smtpConfigured } = require('./lib/mailer');
 const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
+const T = require('./lib/talents');
 
-const DEPLOY_TAG = 'auto-meet-v1';
+const DEPLOY_TAG = 'talent-ledger-v1';
 const { enqueue, workerStatus } = require('./lib/queue');
 
 const app = express();
@@ -34,7 +41,8 @@ function checkRate() {
 }
 function bumpRate() { counter.count += 1; }
 
-app.use(express.json({ limit: '1mb' }));
+// 台账简历文件走 base64 JSON 上传，放宽到 16mb（解码后 ≤12MB）
+app.use(express.json({ limit: '16mb' }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -434,6 +442,169 @@ app.get('/api/wps-log', auth, async (req, res) => {
       .toArray();
     res.json({ logs: list.map(l => ({ ...l, _id: l._id.toString(), at: l.at instanceof Date ? l.at.toISOString() : l.at })) });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ===== 候选人管理台账（2026-09-01）=====
+
+// 阶段定义（前端渲染下拉用）
+app.get('/api/meta', auth, (req, res) => {
+  res.json({ stages: T.STAGES, stageKeys: T.STAGE_KEYS, funnelSteps: T.FUNNEL_STEPS });
+});
+
+// 漏斗统计
+app.get('/api/funnel', auth, async (req, res) => {
+  try {
+    res.json(await T.funnelStats());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 岗位库 CRUD
+app.get('/api/jobs', auth, async (req, res) => {
+  try { res.json({ jobs: await T.listJobs() }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/jobs', auth, async (req, res) => {
+  try { res.json({ success: true, job: await T.createJob(req.body || {}) }); }
+  catch (e) { res.status(e.code === 'BAD_INPUT' ? 400 : 500).json({ error: e.message }); }
+});
+app.patch('/api/jobs/:id', auth, async (req, res) => {
+  try {
+    const job = await T.updateJob(req.params.id, req.body || {});
+    if (!job) return res.status(404).json({ error: '岗位不存在或无字段更新' });
+    res.json({ success: true, job });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.delete('/api/jobs/:id', auth, async (req, res) => {
+  try { res.json({ ok: true, deleted: await T.deleteJob(req.params.id) }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 候选人列表（?stage=&job=&q=&page=&pageSize=&onlyNew=1）
+app.get('/api/talents', auth, async (req, res) => {
+  try {
+    const r = await T.listTalents({
+      stage: req.query.stage || '',
+      job: req.query.job || '',
+      q: req.query.q || '',
+      page: Math.max(1, parseInt(req.query.page || '1', 10) || 1),
+      pageSize: Math.min(300, parseInt(req.query.pageSize || '100', 10) || 100),
+      includeImported: req.query.onlyNew !== '1',
+    });
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// CSV 导出（注意：必须在 /api/talents/:id 之前注册）
+app.get('/api/talents/export', auth, async (req, res) => {
+  try {
+    const { list } = await T.listTalents({ page: 1, pageSize: 300 });
+    const esc = (v) => {
+      if (v == null) return '';
+      if (typeof v === 'object') v = JSON.stringify(v);
+      const s = String(v).replace(/"/g, '""');
+      return /[",\n\r]/.test(s) ? `"${s}"` : s;
+    };
+    const header = ['更新时间', '招聘岗位', '责任人', '姓名', '性别', '年龄', '学历/专业', '文/理工/商科',
+      '证书', '候选人摘要', '工作经验', '离职原因', '到岗时间', '目前薪资', '期望薪资', '英语口语',
+      '推荐原因', '简历文件', '筛选结论', '是否可面试', '复合潜质',
+      '一面日期', '一面结果', '一面反馈1', '一面反馈2',
+      '二面日期', '二面结果', '二面反馈1', '二面反馈2',
+      '录用结果', '不入职原因', '入职时间', '预计转正', '当前阶段', '来源', '渠道', '邮箱', '电话', '备注'];
+    const rows = list.map(t => [
+      t.updatedAt ? new Date(t.updatedAt).toLocaleString('zh-CN') : '',
+      t.jobTitle || '', t.recruiter || '', t.name || '', t.gender || '', t.age || '',
+      t.education || '', t.subjectType || '', t.certificates || '',
+      t.summary || '', t.experience || '', t.leaveReason || '', t.availableTime || '',
+      t.currentSalary || '', t.expectSalary || '', t.englishLevel || '', t.recommendReason || '',
+      t.resumeFileName || '', t.screenMatch || '', t.canInterview || '', t.compositePotential || '',
+      (t.interview1 && t.interview1.date) || '', (t.interview1 && t.interview1.result) || '',
+      (t.interview1 && t.interview1.feedback1) || '', (t.interview1 && t.interview1.feedback2) || '',
+      (t.interview2 && t.interview2.date) || '', (t.interview2 && t.interview2.result) || '',
+      (t.interview2 && t.interview2.feedback1) || '', (t.interview2 && t.interview2.feedback2) || '',
+      t.offerResult || '', t.noJoinReason || '', t.onboardDate || '', t.probationEnd || '',
+      T.stageLabel(t.stage), t.source || '', t.channel || '', t.email || '', t.phone || '', t.notes || '',
+    ].map(esc).join(','));
+    const csv = '\uFEFF' + header.join(',') + '\r\n' + rows.join('\r\n');
+    res.set({
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="recruitment-ledger-${new Date().toISOString().slice(0, 10)}.csv"`,
+    });
+    res.send(csv);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 新建候选人（可携带简历文件 base64 → GridFS）
+app.post('/api/talents', auth, async (req, res) => {
+  const body = req.body || {};
+  try {
+    let resumeFileId = '', resumeFileName = '';
+    if (body.resumeFile && body.resumeFile.dataBase64) {
+      const buf = Buffer.from(body.resumeFile.dataBase64, 'base64');
+      if (buf.length > 12 * 1024 * 1024) {
+        return res.status(400).json({ error: '简历文件超过 12MB，请压缩后重试' });
+      }
+      resumeFileName = body.resumeFile.name || 'resume';
+      resumeFileId = await T.saveResumeFile({
+        name: resumeFileName, contentType: body.resumeFile.contentType, buffer: buf,
+      });
+    }
+    const talent = await T.createTalent({ ...body, resumeFileId, resumeFileName }, {
+      aiParsed: !!body.aiParsed,
+    });
+    res.json({ success: true, talent });
+  } catch (e) {
+    res.status(e.code === 'BAD_INPUT' ? 400 : (e.code === 'DB_DOWN' ? 503 : 500)).json({ error: e.message });
+  }
+});
+
+// 候选人详情
+app.get('/api/talents/:id', auth, async (req, res) => {
+  const t = await T.getTalent(req.params.id);
+  if (!t) return res.status(404).json({ error: '候选人不存在' });
+  res.json({ talent: t });
+});
+
+// 字段更新（阶段流转走 /stage）
+app.patch('/api/talents/:id', auth, async (req, res) => {
+  try {
+    const t = await T.updateTalent(req.params.id, req.body || {});
+    if (!t) return res.status(404).json({ error: '候选人不存在或无字段更新' });
+    res.json({ success: true, talent: t });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 阶段流转 { stage, note, by }
+app.post('/api/talents/:id/stage', auth, async (req, res) => {
+  try {
+    const t = await T.moveStage(req.params.id, req.body || {});
+    if (!t) return res.status(404).json({ error: '候选人不存在' });
+    res.json({ success: true, talent: t });
+  } catch (e) {
+    res.status(e.code === 'BAD_INPUT' ? 400 : 500).json({ error: e.message });
+  }
+});
+
+// 删除（仅测试/误录数据；正常流转用阶段「已淘汰/候选人放弃」）
+app.delete('/api/talents/:id', auth, async (req, res) => {
+  try { res.json({ ok: true, deleted: await T.deleteTalent(req.params.id) }); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 简历下载（<a> 标签无法带 header → 支持 ?t= 口令参数）
+app.get('/api/talents/:id/resume', async (req, res) => {
+  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || String(req.query.t || '');
+  if (!ACCESS_TOKEN || token !== ACCESS_TOKEN) {
+    return res.status(401).json({ error: '口令不正确' });
+  }
+  const t = await T.getTalent(req.params.id);
+  if (!t || !t.resumeFileId) return res.status(404).json({ error: '该候选人没有简历文件' });
+  const file = await T.findResumeFile(t.resumeFileId);
+  if (!file) return res.status(404).json({ error: '简历文件已丢失' });
+  res.set({
+    'Content-Type': file.info.contentType || 'application/octet-stream',
+    'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(file.info.filename || 'resume')}`,
+  });
+  file.stream.pipe(res);
 });
 
 app.get('/api/smtpdiag', auth, async (req, res) => {

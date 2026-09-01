@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>候选人管理台账</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --red: #D8553F; --pink-deep: #C26B86; --pink-soft: #F4A89B;
+    --pink-light: #FBE9EF; --pink-pale: #FFF5F2;
+    --ink: #1A1A1A; --gray: #8C8C8C;
+  }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
+    background: #fff; color: var(--ink); line-height: 1.7; min-height: 100vh;
+  }
+  .top-strip { height: 8px; background: linear-gradient(90deg, #FBE9EF 0%, #F4A89B 50%, #FBE9EF 100%); }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 20px 60px; }
+
+  .hero { text-align: center; padding: 32px 20px 22px; }
+  .hero .eyebrow { font-size: 11px; font-weight: 700; color: var(--red); letter-spacing: 6px; margin-bottom: 12px; }
+  .hero h1 { font-size: 26px; font-weight: 800; letter-spacing: 2px; margin-bottom: 12px; }
+  .hero .dots { display: flex; justify-content: center; gap: 8px; margin-bottom: 12px; }
+  .hero .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--pink-soft); }
+  .hero .dots i:nth-child(2) { opacity: .55; } .hero .dots i:nth-child(3) { opacity: .3; }
+  .hero .sub-en { font-size: 11px; color: var(--gray); letter-spacing: 4px; }
+  .nav-row { display: flex; justify-content: center; gap: 10px; margin-top: 14px; }
+  .nav-row a {
+    font-size: 12.5px; color: var(--pink-deep); text-decoration: none;
+    border: 1px solid #E9D5DA; border-radius: 3px; padding: 5px 16px; background: #fff;
+  }
+  .nav-row a:hover { background: var(--pink-light); }
+
+  /* 登录 */
+  #loginView { max-width: 420px; margin: 60px auto; padding: 0 20px; }
+  #loginView .card { text-align: center; }
+  .card {
+    background: var(--pink-pale); border-left: 4px solid var(--red);
+    border-radius: 4px; padding: 18px 24px; margin-bottom: 16px;
+  }
+  #loginView input {
+    width: 100%; padding: 11px 14px; border: 1px solid #E9D5DA; border-radius: 4px;
+    font-size: 14px; margin: 12px 0; font-family: inherit;
+  }
+  #loginView input:focus { outline: none; border-color: var(--red); box-shadow: 0 0 0 3px rgba(216,85,63,.08); }
+
+  .btn {
+    border: 0; border-radius: 3px; padding: 10px 24px; font-size: 13.5px; font-weight: 600;
+    cursor: pointer; font-family: inherit; transition: all .12s;
+  }
+  .btn-primary { background: var(--red); color: #fff; }
+  .btn-primary:hover { opacity: .88; }
+  .btn-outline { background: #fff; color: var(--red); border: 1px solid var(--red); }
+  .btn-outline:hover { background: var(--pink-light); }
+  .btn-ghost { background: #fff; color: #4A4A4A; border: 1px solid #E9D5DA; }
+  .btn-ghost:hover { background: var(--pink-light); color: var(--red); }
+  .btn-mini {
+    background: #fff; color: var(--red); border: 1px solid var(--red); border-radius: 3px;
+    padding: 3px 10px; font-size: 11.5px; cursor: pointer; font-family: inherit; margin-right: 6px;
+  }
+  .btn-mini:hover { background: var(--pink-light); }
+  .btn-mini.gray { color: #666; border-color: #CCC; }
+  .btn-mini.gray:hover { background: #F5F5F5; color: #333; }
+
+  #mainView { display: none; }
+
+  /* 工具栏 */
+  .toolbar {
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    background: var(--pink-pale); border-left: 4px solid var(--red);
+    border-radius: 4px; padding: 12px 18px; margin-bottom: 14px;
+  }
+  .toolbar input, .toolbar select {
+    padding: 7px 10px; border: 1px solid #E9D5DA; border-radius: 4px;
+    font-size: 13px; font-family: inherit; background: #fff; color: var(--ink);
+  }
+  .toolbar input:focus, .toolbar select:focus { outline: none; border-color: var(--red); }
+  .toolbar .spacer { flex: 1; }
+  .toolbar .cnt { font-size: 12px; color: var(--gray); }
+
+  /* 漏斗 */
+  .funnel { background: var(--pink-pale); border-left: 4px solid var(--pink-deep); border-radius: 4px; padding: 16px 20px; margin-bottom: 14px; }
+  .funnel h2 { font-size: 14.5px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .funnel h2 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pink-deep); }
+  .f-rows { display: flex; flex-direction: column; gap: 7px; }
+  .f-row { display: grid; grid-template-columns: 78px 1fr 120px; gap: 10px; align-items: center; }
+  .f-label { font-size: 12.5px; color: #4A4A4A; font-weight: 600; text-align: right; }
+  .f-bar-track { background: #fff; border-radius: 3px; height: 24px; position: relative; overflow: hidden; border: 1px solid #F0E3E6; }
+  .f-bar { height: 100%; background: linear-gradient(90deg, var(--pink-soft), var(--pink-deep)); border-radius: 3px; min-width: 2px; transition: width .4s; }
+  .f-num { font-size: 12.5px; color: var(--ink); white-space: nowrap; }
+  .f-num b { font-size: 14px; }
+  .f-num .rate { color: var(--pink-deep); font-size: 11.5px; margin-left: 6px; }
+  .f-jobs { margin-top: 14px; overflow-x: auto; }
+  .f-jobs table { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+  .f-jobs th { text-align: left; padding: 6px 10px; background: var(--pink-light); color: var(--pink-deep); font-weight: 700; }
+  .f-jobs td { padding: 5px 10px; border-bottom: 1px solid #F0E3E6; color: #4A4A4A; }
+  .f-jobs td b { color: var(--ink); }
+
+  /* 阶段 chips */
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .chip {
+    font-size: 12px; padding: 5px 13px; border-radius: 20px; cursor: pointer;
+    background: #fff; border: 1px solid #E9D5DA; color: #4A4A4A; font-family: inherit;
+  }
+  .chip:hover { border-color: var(--pink-deep); color: var(--red); }
+  .chip.on { background: var(--red); border-color: var(--red); color: #fff; }
+  .chip .n { font-weight: 700; margin-left: 4px; }
+  .chip.end { border-style: dashed; }
+  .chip.end.on { background: var(--pink-deep); border-color: var(--pink-deep); }
+
+  /* 台账表格 */
+  .ledger { background: #fff; border: 1px solid #E9D5DA; border-radius: 4px; overflow: hidden; margin-bottom: 14px; overflow-x: auto; }
+  .ledger table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .ledger th {
+    text-align: left; padding: 9px 10px; background: var(--pink-light); color: var(--pink-deep);
+    font-weight: 700; white-space: nowrap; position: sticky; top: 0;
+  }
+  .ledger td { padding: 7px 10px; border-bottom: 1px solid #F0E3E6; color: #4A4A4A; vertical-align: middle; }
+  .ledger tr:hover td { background: #FFFAF8; }
+  .ledger .nm { font-weight: 700; color: var(--ink); white-space: nowrap; }
+  .ledger .badge { display: inline-block; font-size: 10px; border-radius: 2px; padding: 0 4px; margin-left: 5px; vertical-align: 1px; }
+  .badge.ai { background: #E8F4EC; color: #2E7D4F; }
+  .badge.imp { background: #F0F0F0; color: #888; }
+  .badge.wps { background: var(--pink-light); color: var(--pink-deep); }
+  .ledger select.stg {
+    font-size: 12px; padding: 4px 6px; border: 1px solid #E9D5DA; border-radius: 3px;
+    background: #fff; font-family: inherit; color: var(--ink); max-width: 130px;
+  }
+  .ledger select.stg.end { color: #B03A28; }
+  .ledger .mut { color: var(--gray); font-size: 11.5px; }
+  .ledger .ops { white-space: nowrap; }
+  .stage-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+  .empty-row td { text-align: center; color: var(--gray); padding: 30px; }
+
+  .pager { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 12px 0; font-size: 12.5px; color: var(--gray); }
+
+  /* 抽屉 */
+  #drawerMask { position: fixed; inset: 0; background: rgba(26,26,26,.28); display: none; z-index: 90; }
+  #drawer {
+    position: fixed; top: 0; right: -640px; width: 640px; max-width: 96vw; height: 100vh;
+    background: #fff; box-shadow: -6px 0 30px rgba(0,0,0,.12); z-index: 99;
+    transition: right .22s; display: flex; flex-direction: column;
+  }
+  #drawer.open { right: 0; }
+  .dw-head {
+    padding: 14px 20px; background: var(--pink-pale); border-bottom: 1px solid #F0E3E6;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .dw-head h3 { font-size: 16px; font-weight: 800; flex: 1; }
+  .dw-head .x { cursor: pointer; font-size: 20px; color: var(--gray); line-height: 1; }
+  .dw-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+  .dw-foot { padding: 12px 20px; border-top: 1px solid #F0E3E6; display: flex; gap: 10px; background: #fff; }
+  .sec { margin-bottom: 18px; }
+  .sec > h4 {
+    font-size: 13px; font-weight: 700; color: var(--red); letter-spacing: 1px;
+    border-bottom: 1px solid #F0E3E6; padding-bottom: 5px; margin-bottom: 10px;
+  }
+  .fgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+  .fgrid .full { grid-column: 1 / -1; }
+  .fi label { display: block; font-size: 11.5px; color: #6A6A6A; margin-bottom: 2px; }
+  .fi input, .fi select, .fi textarea {
+    width: 100%; padding: 6px 9px; border: 1px solid #E9D5DA; border-radius: 3px;
+    font-size: 12.5px; font-family: inherit; background: #fff; color: var(--ink);
+  }
+  .fi textarea { resize: vertical; min-height: 52px; line-height: 1.6; }
+  .fi input:focus, .fi select:focus, .fi textarea:focus { outline: none; border-color: var(--red); }
+  .tl { border-left: 2px solid var(--pink-light); margin-left: 6px; padding-left: 14px; }
+  .tl .tli { position: relative; padding-bottom: 10px; font-size: 12.5px; color: #4A4A4A; }
+  .tl .tli::before {
+    content: ''; position: absolute; left: -19px; top: 6px; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--pink-soft);
+  }
+  .tl .tli b { color: var(--ink); }
+  .tl .tli .t { color: var(--gray); font-size: 11px; margin-left: 6px; }
+  .dw-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .filebox { font-size: 12px; color: var(--pink-deep); background: var(--pink-pale); border: 1px dashed var(--pink-soft); border-radius: 3px; padding: 6px 10px; margin-bottom: 6px; }
+
+  /* 弹窗 */
+  .modal-mask { position: fixed; inset: 0; background: rgba(26,26,26,.32); display: none; z-index: 110; }
+  .modal {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 680px; max-width: 94vw; max-height: 88vh; overflow-y: auto;
+    background: #fff; border-radius: 6px; z-index: 111; padding: 22px 26px; display: none;
+    box-shadow: 0 12px 48px rgba(0,0,0,.18);
+  }
+  .modal h3 { font-size: 16px; font-weight: 800; margin-bottom: 14px; color: var(--ink); }
+  .modal .close-x { float: right; cursor: pointer; font-size: 20px; color: var(--gray); }
+  .jobs-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 10px; }
+  .jobs-tbl th { text-align: left; padding: 7px 9px; background: var(--pink-light); color: var(--pink-deep); }
+  .jobs-tbl td { padding: 6px 9px; border-bottom: 1px solid #F0E3E6; color: #4A4A4A; }
+  .msg { font-size: 13px; margin-top: 10px; display: none; border-radius: 3px; padding: 9px 13px; }
+  .msg.ok { display: block; background: var(--pink-pale); color: var(--red); }
+  .msg.err { display: block; background: #FDECEA; color: #B03A28; }
+
+  .footer { text-align: center; padding: 26px 0 0; margin-top: 20px; border-top: 1px solid #F0E3E6; }
+  .footer .tag { font-size: 10px; letter-spacing: 4px; color: var(--gray); }
+</style>
+</head>
+<body>
+
+<div class="top-strip"></div>
+
+<!-- ===== 登录 ===== -->
+<div id="loginView">
+  <div class="hero" style="padding-bottom:20px">
+    <div class="eyebrow">RECRUIT · 招 聘 台 账</div>
+    <h1>候选人管理台账</h1>
+    <div class="dots"><i></i><i></i><i></i></div>
+    <p class="sub-en">TALENT&nbsp;PIPELINE&nbsp;·&nbsp;CLOUD&nbsp;EDITION</p>
+  </div>
+  <div class="card">
+    <input type="password" id="tokenInput" placeholder="招聘端共享口令" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn btn-primary" style="width:100%" onclick="doLogin()">进入台账</button>
+  </div>
+</div>
+
+<!-- ===== 主视图 ===== -->
+<div id="mainView">
+  <div class="wrap">
+    <div class="hero" style="padding-bottom:10px">
+      <div class="eyebrow">RECRUIT · 招 聘 台 账</div>
+      <h1>候选人管理台账</h1>
+      <div class="dots"><i></i><i></i><i></i></div>
+      <p class="sub-en">TALENT&nbsp;PIPELINE&nbsp;·&nbsp;CLOUD&nbsp;EDITION</p>
+      <div class="nav-row">
+        <a href="index.html">← 面试邀约工具</a>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <input type="text" id="qInput" placeholder="搜索姓名/岗位/摘要…" style="width:190px" onkeydown="if(event.key==='Enter'){state.page=1;loadTalents()}">
+      <select id="jobFilter" onchange="state.page=1;loadTalents()"><option value="">全部岗位</option></select>
+      <select id="stageFilter" onchange="state.page=1;loadTalents()"><option value="">全部阶段</option></select>
+      <button class="btn btn-ghost" onclick="state.page=1;loadTalents()">查询</button>
+      <span class="spacer"></span>
+      <span class="cnt" id="totalCnt"></span>
+      <button class="btn btn-ghost" onclick="exportCsv()">导出 CSV</button>
+      <button class="btn btn-outline" onclick="openJobsModal()">岗位管理</button>
+      <button class="btn btn-outline" onclick="openNewModal()">＋ 上传简历 / 新增</button>
+    </div>
+
+    <div class="funnel">
+      <h2><span class="dot"></span>招聘漏斗</h2>
+      <div class="f-rows" id="funnelRows"></div>
+      <div class="f-jobs" id="funnelJobs"></div>
+    </div>
+
+    <div class="chips" id="stageChips"></div>
+
+    <div class="ledger">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:110px">姓名</th><th>应聘岗位</th><th>部门</th>
+            <th style="width:140px">当前阶段</th>
+            <th>一面</th><th>二面</th>
+            <th>来源</th><th>责任人</th>
+            <th style="width:92px">标记</th>
+            <th style="width:150px">操作</th>
+          </tr>
+        </thead>
+        <tbody id="talentBody"></tbody>
+      </table>
+    </div>
+    <div class="pager" id="pager"></div>
+
+    <div class="footer">
+      <div class="tag">RECRUITMENT&nbsp;LEDGER&nbsp;·&nbsp;2026</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 详情抽屉 ===== -->
+<div id="drawerMask" onclick="closeDrawer()"></div>
+<div id="drawer">
+  <div class="dw-head">
+    <h3 id="dwName">候选人详情</h3>
+    <span class="x" onclick="closeDrawer()">✕</span>
+  </div>
+  <div class="dw-body" id="dwBody"></div>
+  <div class="dw-foot">
+    <button class="btn btn-primary" onclick="saveDrawer()">保存修改</button>
+    <button class="btn btn-outline" onclick="inviteJump()">✉ 发面试邀约</button>
+    <button class="btn btn-ghost" onclick="delTalent()">删除</button>
+  </div>
+</div>
+
+<!-- ===== 新增候选人 ===== -->
+<div class="modal-mask" id="newMask"></div>
+<div class="modal" id="newModal">
+  <span class="close-x" onclick="closeNewModal()">✕</span>
+  <h3>上传简历 / 新增候选人</h3>
+  <div class="fgrid">
+    <div class="fi"><label>姓名 *</label><input id="n_name" type="text"></div>
+    <div class="fi"><label>应聘岗位</label><input id="n_job" type="text" placeholder="如：海外销售专员"></div>
+    <div class="fi"><label>部门</label><input id="n_dept" type="text"></div>
+    <div class="fi"><label>责任人（招聘同事）</label><input id="n_recruiter" type="text"></div>
+    <div class="fi"><label>来源</label>
+      <select id="n_source">
+        <option value="主动投递">主动投递</option>
+        <option value="我司邀约">我司邀约</option>
+        <option value="内推">内推</option>
+        <option value="猎头推荐">猎头推荐</option>
+        <option value="返聘">返聘</option>
+        <option value="其他">其他</option>
+      </select>
+    </div>
+    <div class="fi"><label>渠道</label><input id="n_channel" type="text" placeholder="boss直聘 / 猎聘 / 推荐…"></div>
+    <div class="fi"><label>邮箱（发邀约用）</label><input id="n_email" type="text"></div>
+    <div class="fi"><label>电话</label><input id="n_phone" type="text"></div>
+    <div class="fi full"><label>简历文件（PDF/Word/图片，选填；上传后由 AI 助手识别补充信息）</label>
+      <input id="n_resume" type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.wps">
+    </div>
+  </div>
+  <div class="msg" id="newMsg"></div>
+  <div style="text-align:right;margin-top:14px">
+    <button class="btn btn-ghost" onclick="closeNewModal()">取消</button>
+    <button class="btn btn-primary" onclick="submitNew()">保存入台账</button>
+  </div>
+</div>
+
+<!-- ===== 岗位管理 ===== -->
+<div class="modal-mask" id="jobsMask"></div>
+<div class="modal" id="jobsModal">
+  <span class="close-x" onclick="closeJobsModal()">✕</span>
+  <h3>岗位管理（JD · HC · 渠道数据）</h3>
+  <div style="overflow-x:auto">
+    <table class="jobs-tbl" id="jobsTbl"></table>
+  </div>
+  <div class="msg" id="jobsMsg"></div>
+  <h3 style="font-size:14px;margin-top:16px">＋ 新增 / 编辑岗位</h3>
+  <div class="fgrid">
+    <div class="fi"><label>岗位名称 *</label><input id="j_title" type="text"></div>
+    <div class="fi"><label>用人部门</label><input id="j_dept" type="text"></div>
+    <div class="fi"><label>需求 HC</label><input id="j_hc" type="number" min="0"></div>
+    <div class="fi"><label>优先级</label><input id="j_priority" type="text" placeholder="P0 / P1 / P2…"></div>
+    <div class="fi"><label>状态</label>
+      <select id="j_status">
+        <option value="open">在招</option><option value="paused">暂停</option><option value="closed">关闭</option>
+      </select>
+    </div>
+    <div class="fi"><label>计划到岗</label><input id="j_planDate" type="text" placeholder="如 2026/6/30"></div>
+    <div class="fi full"><label>岗位 JD（粘贴全文，候选人匹配参考）</label><textarea id="j_jd" style="min-height:90px"></textarea></div>
+    <div class="fi"><label>BOSS 浏览量</label><input id="j_bossViews" type="number" min="0"></div>
+    <div class="fi"><label>BOSS 主动投递</label><input id="j_bossApplies" type="number" min="0"></div>
+  </div>
+  <div style="text-align:right;margin-top:12px">
+    <input type="hidden" id="j_id">
+    <button class="btn btn-ghost" onclick="clearJobForm()">清空</button>
+    <button class="btn btn-primary" onclick="saveJob()">保存岗位</button>
+  </div>
+</div>
+
+<script>
+// ===== 与邀约工具共享登录态 =====
+const API = '';
+let TOKEN = localStorage.getItem('invite_token') || '';
+
+const STAGES = {
+  resume:    { label: '简历入库',      step: 0, group: 'pipeline' },
+  screening: { label: '初筛评估',      step: 0, group: 'pipeline' },
+  wait1:     { label: '待约一面',      step: 1, group: 'pipeline' },
+  i1:        { label: '已约一面',      step: 2, group: 'pipeline' },
+  i1done:    { label: '一面完成·待定', step: 2, group: 'pipeline' },
+  wait2:     { label: '待约二面',      step: 3, group: 'pipeline' },
+  i2:        { label: '已约二面',      step: 3, group: 'pipeline' },
+  i2done:    { label: '二面完成·待定', step: 3, group: 'pipeline' },
+  offer:     { label: '录用·待入职',   step: 4, group: 'pipeline' },
+  onboarded: { label: '已入职',        step: 5, group: 'pipeline' },
+  rejected:  { label: '已淘汰',        group: 'end' },
+  declined:  { label: '候选人放弃',    group: 'end' },
+};
+const STAGE_KEYS = Object.keys(STAGES);
+const STAGE_COLORS = {
+  resume: '#C9C9C9', screening: '#B9A8D8', wait1: '#8FB8DE', i1: '#6FA8DC', i1done: '#5B9BD5',
+  wait2: '#7FD1AE', i2: '#57C4A3', i2done: '#3FA98E', offer: '#F0A5A5', onboarded: '#D8553F',
+  rejected: '#B0B0B0', declined: '#C9A0DC',
+};
+
+const state = {
+  page: 1, pageSize: 100, total: 0,
+  talents: [], funnel: null, jobs: [],
+  wpsMap: {},   // name -> {at, email, phone, job}
+  inviteMap: {},// name -> count
+  curId: null, cur: null,
+};
+
+const esc = (s) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+const fmtDT = (v) => {
+  if (!v) return '';
+  const d = new Date(v);
+  if (isNaN(d)) return String(v);
+  const p = (x) => String(x).padStart(2, '0');
+  return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+const relTime = (v) => {
+  if (!v) return '';
+  const d = new Date(v); if (isNaN(d)) return '';
+  const s = (Date.now() - d.getTime()) / 1000;
+  if (s < 60) return '刚刚';
+  if (s < 3600) return Math.floor(s/60) + ' 分钟前';
+  if (s < 86400) return Math.floor(s/3600) + ' 小时前';
+  if (s < 86400*30) return Math.floor(s/86400) + ' 天前';
+  return fmtDT(v).slice(0, 10);
+};
+
+// ===== 登录 =====
+async function doLogin() {
+  const t = document.getElementById('tokenInput').value.trim();
+  if (!t) return;
+  try {
+    const r = await fetch(API + '/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: t }),
+    });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error || '登录失败'); return; }
+    TOKEN = t; localStorage.setItem('invite_token', t);
+    enterMain();
+  } catch (e) { alert('网络异常：' + e.message); }
+}
+function enterMain() {
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('mainView').style.display = 'block';
+  loadAll();
+}
+
+// ===== 数据加载 =====
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, {
+    ...opts,
+    headers: {
+      ...(opts.headers || {}),
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + TOKEN,
+    },
+  });
+  if (r.status === 401) { localStorage.removeItem('invite_token'); location.reload(); throw new Error('登录已过期'); }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+  return d;
+}
+
+async function loadAll() {
+  await Promise.all([loadFunnel(), loadJobs(), loadWps(), loadInvites()]);
+  await loadTalents();
+}
+
+async function loadTalents() {
+  const q = document.getElementById('qInput').value.trim();
+  const job = document.getElementById('jobFilter').value;
+  const stage = document.getElementById('stageFilter').value;
+  const params = new URLSearchParams({ page: state.page, pageSize: state.pageSize });
+  if (q) params.set('q', q);
+  if (job) params.set('job', job);
+  if (stage) params.set('stage', stage);
+  try {
+    const d = await api('/api/talents?' + params.toString());
+    state.talents = d.list; state.total = d.total;
+    renderTable(); renderPager();
+  } catch (e) { alert('加载失败：' + e.message); }
+}
+
+async function loadFunnel() {
+  try {
+    state.funnel = await api('/api/funnel');
+    renderFunnel(); renderChips();
+  } catch (e) { console.error(e); }
+}
+
+async function loadJobs() {
+  try {
+    const d = await api('/api/jobs');
+    state.jobs = d.jobs || [];
+    const sel = document.getElementById('jobFilter');
+    const cur = sel.value;
+    const titles = [...new Set([...state.jobs.map(j => j.title), ...state.talents.map(t => t.jobTitle)].filter(Boolean))];
+    sel.innerHTML = '<option value="">全部岗位</option>' + titles.map(t => `<option${t===cur?' selected':''}>${esc(t)}</option>`).join('');
+    renderJobsTable();
+  } catch (e) { console.error(e); }
+}
+
+async function loadWps() {
+  try {
+    const d = await api('/api/candidates');
+    (d.candidates || []).forEach(c => {
+      if (c.name) state.wpsMap[c.name] = { at: c.submittedAt, email: c.email, phone: c.phone, job: c.job };
+    });
+  } catch (e) { console.error(e); }
+}
+
+async function loadInvites() {
+  try {
+    const d = await api('/api/logs?limit=200');
+    (d.logs || []).forEach(l => {
+      if (l.candidateName) state.inviteMap[l.candidateName] = (state.inviteMap[l.candidateName] || 0) + 1;
+    });
+  } catch (e) { console.error(e); }
+}
+
+// ===== 漏斗渲染 =====
+function renderFunnel() {
+  const f = state.funnel; if (!f) return;
+  const totals = f.totals || [];
+  const max = Math.max(...totals.map(t => t.count), 1);
+  let html = '';
+  totals.forEach((t, i) => {
+    const w = Math.round(t.count / max * 100);
+    let rate = '';
+    if (i > 0 && totals[i-1].count > 0) {
+      rate = `<span class="rate">${(t.count / totals[i-1].count * 100).toFixed(1)}%</span>`;
+    }
+    html += `
+      <div class="f-row">
+        <div class="f-label">${esc(t.label)}</div>
+        <div class="f-bar-track"><div class="f-bar" style="width:${w}%"></div></div>
+        <div class="f-num"><b>${t.count}</b> 人${rate}</div>
+      </div>`;
+  });
+  document.getElementById('funnelRows').innerHTML = html;
+
+  const jobs = (f.byJob || []).filter(j => j.resumes > 0);
+  if (jobs.length) {
+    document.getElementById('funnelJobs').innerHTML = `
+      <table>
+        <thead><tr><th>岗位</th><th>简历</th><th>有效</th><th>一面</th><th>二面</th><th>录用</th><th>入职</th><th>在流程中</th></tr></thead>
+        <tbody>${jobs.map(j => `
+          <tr>
+            <td><b>${esc(j.jobTitle)}</b>${j.dept ? ' <span style="color:#999">· ' + esc(j.dept) + '</span>' : ''}</td>
+            <td>${j.resumes}</td><td>${j.valid}</td><td>${j.i1}</td><td>${j.i2}</td>
+            <td>${j.offer}</td><td>${j.onboard}</td>
+            <td>${j.inProgress ? '<b style="color:var(--red)">' + j.inProgress + '</b>' : '<span style="color:#ccc">0</span>'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+}
+
+function renderChips() {
+  const f = state.funnel; if (!f) return;
+  const cur = document.getElementById('stageFilter').value;
+  document.getElementById('stageChips').innerHTML = STAGE_KEYS.map(k => {
+    const hit = (f.stageCounts || []).find(s => s.stage === k);
+    const n = hit ? hit.count : 0;
+    const on = cur === k ? ' on' : '';
+    const end = STAGES[k].group === 'end' ? ' end' : '';
+    return `<button class="chip${on}${end}" onclick="chipFilter('${k}')">${STAGES[k].label}<span class="n">${n}</span></button>`;
+  }).join('');
+}
+function chipFilter(k) {
+  const sel = document.getElementById('stageFilter');
+  sel.value = sel.value === k ? '' : k;
+  state.page = 1; loadTalents();
+}
+
+// ===== 表格渲染 =====
+function renderTable() {
+  const body = document.getElementById('talentBody');
+  document.getElementById('totalCnt').textContent = `共 ${state.total} 位候选人`;
+  if (!state.talents.length) {
+    body.innerHTML = '<tr class="empty-row"><td colspan="10">没有符合条件的候选人</td></tr>';
+    return;
+  }
+  body.innerHTML = state.talents.map(t => {
+    const wps = state.wpsMap[t.name];
+    const inv = state.inviteMap[t.name] || 0;
+    const i1d = t.interview1 && t.interview1.date ? `${t.interview1.date}${t.interview1.result ? ' · ' + esc(t.interview1.result) : ''}` : '<span class="mut">—</span>';
+    const i2d = t.interview2 && t.interview2.date ? `${t.interview2.date}${t.interview2.result ? ' · ' + esc(t.interview2.result) : ''}` : '<span class="mut">—</span>';
+    const stgCls = STAGES[t.stage] && STAGES[t.stage].group === 'end' ? ' end' : '';
+    return `
+      <tr>
+        <td class="nm">${esc(t.name)}
+          ${t.aiParsed ? '<span class="badge ai">AI</span>' : ''}
+          ${t.imported ? '<span class="badge imp">导入</span>' : ''}
+        </td>
+        <td>${esc(t.jobTitle || '')}</td>
+        <td>${esc(t.dept || '')}</td>
+        <td>
+          <select class="stg${stgCls}" onchange="quickStage('${t._id}', this.value)">
+            ${STAGE_KEYS.map(k => `<option value="${k}"${t.stage===k?' selected':''}>${STAGES[k].label}</option>`).join('')}
+          </select>
+        </td>
+        <td>${i1d}</td><td>${i2d}</td>
+        <td>${esc(t.source || '')}</td>
+        <td>${esc(t.recruiter || '')}</td>
+        <td>
+          ${t.resumeFileId ? '📄' : ''}
+          ${wps ? '<span class="badge wps" title="已提交 WPS 信息采集表">表</span>' : ''}
+          ${inv ? '✉' + inv : ''}
+        </td>
+        <td class="ops">
+          <button class="btn-mini" onclick="openDrawer('${t._id}')">详情</button>
+          <button class="btn-mini gray" onclick="inviteJumpById('${t._id}')">邀约</button>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+function renderPager() {
+  const pages = Math.ceil(state.total / state.pageSize) || 1;
+  document.getElementById('pager').innerHTML = `
+    <button class="btn btn-ghost" ${state.page<=1?'disabled':''} onclick="page(${state.page-1})">上一页</button>
+    <span>第 ${state.page} / ${pages} 页</span>
+    <button class="btn btn-ghost" ${state.page>=pages?'disabled':''} onclick="page(${state.page+1})">下一页</button>`;
+}
+function page(p) { state.page = Math.max(1, p); loadTalents(); }
+
+async function quickStage(id, stage) {
+  try {
+    const note = stage === 'rejected' ? (prompt('淘汰原因（选填）：') || '') : '';
+    await api(`/api/talents/${id}/stage`, { method: 'POST', body: JSON.stringify({ stage, note }) });
+    await Promise.all([loadTalents(), loadFunnel()]);
+  } catch (e) { alert('流转失败：' + e.message); loadTalents(); }
+}
+
+// ===== 详情抽屉 =====
+function fi(label, id, val, full, opts = {}) {
+  const v = esc(val);
+  if (opts.type === 'select') {
+    const cur = String(val || '');
+    return `<div class="fi${full?' full':''}"><label>${label}</label><select id="${id}">
+      ${opts.options.map(o => `<option value="${esc(o)}"${o===cur?' selected':''}>${esc(o)}</option>`).join('')}
+    </select></div>`;
+  }
+  if (opts.type === 'textarea') {
+    return `<div class="fi${full?' full':''}"><label>${label}</label><textarea id="${id}">${v}</textarea></div>`;
+  }
+  return `<div class="fi${full?' full':''}"><label>${label}</label><input id="${id}" type="text" value="${v}"></div>`;
+}
+
+async function openDrawer(id) {
+  try {
+    const d = await api('/api/talents/' + id);
+    state.curId = id; state.cur = d.talent;
+  } catch (e) { alert('加载失败：' + e.message); return; }
+  const t = state.cur;
+  document.getElementById('dwName').textContent = `${t.name} · ${t.jobTitle || '未定岗位'}`;
+  const i1 = t.interview1 || {}, i2 = t.interview2 || {};
+  const wps = state.wpsMap[t.name];
+  const inv = state.inviteMap[t.name] || 0;
+  const resOpts = ['', '通过', '不通过', '待定'];
+  const yon = ['', '是', '否'];
+  document.getElementById('dwBody').innerHTML = `
+    <div class="sec">
+      <h4>阶段流转</h4>
+      <div class="fgrid">
+        ${fi('当前阶段', 'd_stage', t.stage, false, { type: 'select', options: STAGE_KEYS })}
+        <div class="fi"><label>流转备注（如淘汰原因，留空不改）</label><input id="d_note" type="text" placeholder="选填"></div>
+      </div>
+      <div class="tl" style="margin-top:10px">
+        ${(t.history || []).slice().reverse().map(h => `
+          <div class="tli"><b>${esc(STAGES[h.stage] ? STAGES[h.stage].label : h.stage)}</b>${h.note ? '：' + esc(h.note) : ''}<span class="t">${esc(fmtDT(h.at))}${h.by ? ' · ' + esc(h.by) : ''}</span></div>
+        `).join('') || '<div class="tli">暂无记录</div>'}
+      </div>
+    </div>
+
+    <div class="sec">
+      <h4>关联状态</h4>
+      <div class="dw-links">
+        ${t.resumeFileId ? `<a class="filebox" href="${API}/api/talents/${t._id}/resume?t=${encodeURIComponent(TOKEN)}" target="_blank">📄 ${esc(t.resumeFileName || '简历文件')}（点击下载）</a>` : '<span class="filebox" style="color:#999">无简历文件</span>'}
+        ${wps ? `<span class="filebox">✅ 已提交 WPS 信息采集表（${esc(relTime(wps.at))}）</span>` : '<span class="filebox" style="color:#999">未提交 WPS 信息采集表</span>'}
+        ${inv ? `<span class="filebox">✉ 已发邀约 ${inv} 次</span>` : '<span class="filebox" style="color:#999">未发过邀约</span>'}
+      </div>
+    </div>
+
+    <div class="sec">
+      <h4>基本信息</h4>
+      <div class="fgrid">
+        ${fi('姓名', 'd_name', t.name)}
+        ${fi('性别', 'd_gender', t.gender, false, { type: 'select', options: ['', '男', '女'] })}
+        ${fi('年龄', 'd_age', t.age)}
+        ${fi('学历 / 专业', 'd_education', t.education)}
+        ${fi('文/理工/商科', 'd_subjectType', t.subjectType, false, { type: 'select', options: ['', '文科', '理工科', '商科', '艺术', '其他'] })}
+        ${fi('英语口语', 'd_englishLevel', t.englishLevel)}
+        ${fi('邮箱', 'd_email', t.email || (wps && wps.email) || '')}
+        ${fi('电话', 'd_phone', t.phone || (wps && wps.phone) || '')}
+      </div>
+    </div>
+
+    <div class="sec">
+      <h4>应聘信息</h4>
+      <div class="fgrid">
+        ${fi('应聘岗位', 'd_jobTitle', t.jobTitle)}
+        ${fi('部门', 'd_dept', t.dept)}
+        ${fi('责任人', 'd_recruiter', t.recruiter)}
+        ${fi('来源', 'd_source', t.source, false, { type: 'select', options: ['', '主动投递', '我司邀约', '内推', '猎头推荐', '返聘', '其他'] })}
+        ${fi('渠道', 'd_channel', t.channel)}
+        ${fi('到岗时间', 'd_availableTime', t.availableTime)}
+        ${fi('目前薪资', 'd_currentSalary', t.currentSalary)}
+        ${fi('期望薪资', 'd_expectSalary', t.expectSalary)}
+      </div>
+    </div>
+
+    <div class="sec">
+      <h4>简历信息</h4>
+      <div class="fgrid">
+        ${fi('候选人摘要', 'd_summary', t.summary, true, { type: 'textarea' })}
+        ${fi('工作经验', 'd_experience', t.experience, true, { type: 'textarea' })}
+        ${fi('离职原因', 'd_leaveReason', t.leaveReason, true, { type: 'textarea' })}
+        ${fi('证书', 'd_certificates', t.certificates)}
+      </div>
+    </div>
+
+    <div class="sec">
+      <h4>筛选评估</h4>
+      <div class="fgrid">
+        ${fi('筛选结论', 'd_screenMatch', t.screenMatch, false, { type: 'select', options: ['', '推荐面试', '待评估', '不推荐'] })}
+        ${fi('是否可面试（用人部门）', 'd_canInterview', t.canInterview, false, { type: 'select', options: yon })}
+        ${fi('复合型人才潜质', 'd_compositePotential', t.compositePotential, false, { type: 'select', options: yon })}
+        ${fi('推荐原因', 'd_recruiterReason_x', t.recommendReason, true, {})}
+      </div>
+    </div>
+
+    <div class="sec">
+      <h4>一面</h4>
+      <div class="fgrid">
+        ${fi('面试日期', 'd_i1date', i1.date)}
+        ${fi('时间', 'd_i1time', i1.time)}
+        ${fi('形式', 'd_i1mode', i1.mode, false, { type: 'select', options: ['', '线上', '线下'] })}
+        ${fi('匹配度', 'd_i1match', i1.matchLevel)}
+        ${fi('结果', 'd_i1result', i1.result, false, { type: 'select', options: resOpts })}
+        ${fi('面试官', 'd_i1interviewers', i1.interviewers)}
+        ${fi('面试官1 反馈', 'd_i1f1', i1.feedback1, true, { type: 'textarea' })}
+        ${fi('面试官2 反馈', 'd_i1f2', i1.feedback2, true, { type: 'textarea' })}
+      </div>
+    </div>
+
+    <div class="sec">
+      <h4>二面</h4>
+      <div class="fgrid">
+        ${fi('面试日期', 'd_i2date', i2.date)}
+        ${fi('时间', 'd_i2time', i2.time)}
+        ${fi('形式', 'd_i2mode', i2.mode, false, { type: 'select', options: ['', '线上', '线下'] })}
+        ${fi('匹配度', 'd_i2match', i2.matchLevel)}
+        ${fi('结果', 'd_i2result', i2.result, false, { type: 'select', options: resOpts })}
+        ${fi('面试官', 'd_i2interviewers', i2.interviewers)}
+        ${fi('面试官1 反馈', 'd_i2f1', i2.feedback1, true, { type: 'textarea' })}
+        ${fi('面试官2 反馈', 'd_i2f2', i2.feedback2, true, { type: 'textarea' })}
+      </div>
+    </div>
+
+    <div class="sec">
+      <h4>结果与入职</h4>
+      <div class="fgrid">
+        ${fi('录用结果', 'd_offerResult', t.offerResult, false, { type: 'select', options: ['', '录用', '待定', '不录用'] })}
+        ${fi('不入职原因', 'd_noJoinReason', t.noJoinReason)}
+        ${fi('入职时间', 'd_onboardDate', t.onboardDate)}
+        ${fi('预计转正', 'd_probationEnd', t.probationEnd)}
+        ${fi('备注', 'd_notes', t.notes, true)}
+      </div>
+    </div>`;
+
+  document.getElementById('drawerMask').style.display = 'block';
+  document.getElementById('drawer').classList.add('open');
+}
+function closeDrawer() {
+  document.getElementById('drawerMask').style.display = 'none';
+  document.getElementById('drawer').classList.remove('open');
+}
+const gv = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : undefined; };
+
+async function saveDrawer() {
+  const t = state.cur; if (!t) return;
+  const patch = {
+    name: gv('d_name'), gender: gv('d_gender'), age: gv('d_age'),
+    education: gv('d_education'), subjectType: gv('d_subjectType'),
+    englishLevel: gv('d_englishLevel'), email: gv('d_email'), phone: gv('d_phone'),
+    jobTitle: gv('d_jobTitle'), dept: gv('d_dept'), recruiter: gv('d_recruiter'),
+    source: gv('d_source'), channel: gv('d_channel'), availableTime: gv('d_availableTime'),
+    currentSalary: gv('d_currentSalary'), expectSalary: gv('d_expectSalary'),
+    summary: gv('d_summary'), experience: gv('d_experience'), leaveReason: gv('d_leaveReason'),
+    certificates: gv('d_certificates'),
+    screenMatch: gv('d_screenMatch'), canInterview: gv('d_canInterview'),
+    compositePotential: gv('d_compositePotential'), recommendReason: gv('d_recruiterReason_x'),
+    interview1: { date: gv('d_i1date'), time: gv('d_i1time'), mode: gv('d_i1mode'), matchLevel: gv('d_i1match'), result: gv('d_i1result'), interviewers: gv('d_i1interviewers'), feedback1: gv('d_i1f1'), feedback2: gv('d_i1f2') },
+    interview2: { date: gv('d_i2date'), time: gv('d_i2time'), mode: gv('d_i2mode'), matchLevel: gv('d_i2match'), result: gv('d_i2result'), interviewers: gv('d_i2interviewers'), feedback1: gv('d_i2f1'), feedback2: gv('d_i2f2') },
+    offerResult: gv('d_offerResult'), noJoinReason: gv('d_noJoinReason'),
+    onboardDate: gv('d_onboardDate'), probationEnd: gv('d_probationEnd'), notes: gv('d_notes'),
+  };
+  const newStage = gv('d_stage');
+  const note = gv('d_note') || '';
+  try {
+    await api('/api/talents/' + state.curId, { method: 'PATCH', body: JSON.stringify(patch) });
+    if (newStage && newStage !== t.stage) {
+      await api(`/api/talents/${state.curId}/stage`, { method: 'POST', body: JSON.stringify({ stage: newStage, note }) });
+    }
+    await Promise.all([loadTalents(), loadFunnel()]);
+    openDrawer(state.curId);
+  } catch (e) { alert('保存失败：' + e.message); }
+}
+
+async function delTalent() {
+  const t = state.cur; if (!t) return;
+  if (!confirm(`确定删除「${t.name}」？此操作不可恢复（历史候选人建议改为「已淘汰」保留记录）。`)) return;
+  try {
+    await api('/api/talents/' + state.curId, { method: 'DELETE' });
+    closeDrawer();
+    await Promise.all([loadTalents(), loadFunnel()]);
+  } catch (e) { alert('删除失败：' + e.message); }
+}
+
+// ===== 邀约跳转 =====
+function inviteJumpById(id) {
+  const t = state.talents.find(x => x._id === id);
+  if (t) doInviteJump(t);
+}
+function inviteJump() {
+  if (state.cur) doInviteJump(state.cur);
+}
+function doInviteJump(t) {
+  const wps = state.wpsMap[t.name] || {};
+  const email = t.email || wps.email || '';
+  const i1 = t.interview1 || {};
+  const params = new URLSearchParams();
+  params.set('name', t.name || '');
+  if (email) params.set('email', email);
+  if (t.jobTitle) params.set('job', t.jobTitle);
+  if (t.phone || wps.phone) params.set('phone', t.phone || wps.phone);
+  const iv = (i1.date && i1.time) ? i1 : (t.interview2 || {});
+  if (iv.date) params.set('date', iv.date);
+  if (iv.time) params.set('time', iv.time);
+  if (iv.mode === '线上' || iv.mode === '线下') params.set('mode', iv.mode === '线上' ? 'online' : 'offline');
+  window.open('index.html?' + params.toString(), '_blank');
+}
+
+// ===== 新增候选人 =====
+function openNewModal() {
+  document.getElementById('newMask').style.display = 'block';
+  document.getElementById('newModal').style.display = 'block';
+}
+function closeNewModal() {
+  document.getElementById('newMask').style.display = 'none';
+  document.getElementById('newModal').style.display = 'none';
+  document.getElementById('newMsg').className = 'msg';
+}
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result).split(',')[1] || '');
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+}
+async function submitNew() {
+  const msg = document.getElementById('newMsg');
+  const name = gv('n_name');
+  if (!name) { msg.className = 'msg err'; msg.textContent = '姓名必填'; return; }
+  const file = document.getElementById('n_resume').files[0];
+  const body = {
+    name, jobTitle: gv('n_job'), dept: gv('n_dept'), recruiter: gv('n_recruiter'),
+    source: gv('n_source'), channel: gv('n_channel'), email: gv('n_email'), phone: gv('n_phone'),
+    stage: 'resume',
+  };
+  try {
+    if (file) {
+      if (file.size > 12 * 1024 * 1024) { msg.className = 'msg err'; msg.textContent = '简历文件超过 12MB'; return; }
+      body.resumeFile = {
+        name: file.name,
+        contentType: file.type || 'application/octet-stream',
+        dataBase64: await fileToBase64(file),
+      };
+    }
+    msg.className = 'msg'; msg.textContent = '保存中…';
+    await api('/api/talents', { method: 'POST', body: JSON.stringify(body) });
+    closeNewModal();
+    await Promise.all([loadTalents(), loadFunnel()]);
+  } catch (e) { msg.className = 'msg err'; msg.textContent = '保存失败：' + e.message; }
+}
+
+// ===== 岗位管理 =====
+function openJobsModal() {
+  document.getElementById('jobsMask').style.display = 'block';
+  document.getElementById('jobsModal').style.display = 'block';
+  renderJobsTable();
+}
+function closeJobsModal() {
+  document.getElementById('jobsMask').style.display = 'none';
+  document.getElementById('jobsModal').style.display = 'none';
+}
+function renderJobsTable() {
+  const el = document.getElementById('jobsTbl'); if (!el) return;
+  if (!state.jobs.length) { el.innerHTML = '<tr><td style="padding:16px;color:#999">还没有岗位，先在下方新增</td></tr>'; return; }
+  const stMap = { open: '在招', paused: '暂停', closed: '关闭' };
+  el.innerHTML = `
+    <thead><tr><th>岗位</th><th>部门</th><th>HC</th><th>优先级</th><th>状态</th><th>BOSS浏览/投递</th><th>操作</th></tr></thead>
+    <tbody>${state.jobs.map(j => `
+      <tr>
+        <td><b>${esc(j.title)}</b></td>
+        <td>${esc(j.dept || '')}</td>
+        <td>${j.hc != null ? j.hc : ''}</td>
+        <td>${esc(j.priority || '')}</td>
+        <td>${stMap[j.status] || j.status || ''}</td>
+        <td>${j.bossViews || 0} / ${j.bossApplies || 0}</td>
+        <td>
+          <button class="btn-mini" onclick="editJob('${j._id}')">编辑</button>
+          <button class="btn-mini gray" onclick="delJob('${j._id}')">删</button>
+        </td>
+      </tr>`).join('')}
+    </tbody>`;
+}
+function editJob(id) {
+  const j = state.jobs.find(x => x._id === id); if (!j) return;
+  document.getElementById('j_id').value = j._id;
+  document.getElementById('j_title').value = j.title || '';
+  document.getElementById('j_dept').value = j.dept || '';
+  document.getElementById('j_hc').value = j.hc != null ? j.hc : '';
+  document.getElementById('j_priority').value = j.priority || '';
+  document.getElementById('j_status').value = j.status || 'open';
+  document.getElementById('j_planDate').value = j.planDate || '';
+  document.getElementById('j_jd').value = j.jd || '';
+  document.getElementById('j_bossViews').value = j.bossViews != null ? j.bossViews : '';
+  document.getElementById('j_bossApplies').value = j.bossApplies != null ? j.bossApplies : '';
+}
+function clearJobForm() {
+  document.getElementById('j_id').value = '';
+  ['j_title','j_dept','j_hc','j_priority','j_planDate','j_jd','j_bossViews','j_bossApplies'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('j_status').value = 'open';
+}
+async function saveJob() {
+  const id = document.getElementById('j_id').value;
+  const body = {
+    title: gv('j_title'), dept: gv('j_dept'),
+    hc: gv('j_hc') === '' ? null : Number(gv('j_hc')),
+    priority: gv('j_priority'), status: gv('j_status'), planDate: gv('j_planDate'),
+    jd: gv('j_jd'),
+    bossViews: gv('j_bossViews') === '' ? null : Number(gv('j_bossViews')),
+    bossApplies: gv('j_bossApplies') === '' ? null : Number(gv('j_bossApplies')),
+  };
+  const msg = document.getElementById('jobsMsg');
+  try {
+    if (id) await api('/api/jobs/' + id, { method: 'PATCH', body: JSON.stringify(body) });
+    else await api('/api/jobs', { method: 'POST', body: JSON.stringify(body) });
+    clearJobForm();
+    await loadJobs();
+    msg.className = 'msg ok'; msg.textContent = '已保存';
+    setTimeout(() => { msg.className = 'msg'; }, 1800);
+  } catch (e) { msg.className = 'msg err'; msg.textContent = '保存失败：' + e.message; }
+}
+async function delJob(id) {
+  const j = state.jobs.find(x => x._id === id);
+  if (!confirm(`删除岗位「${j ? j.title : id}」？（候选人记录不受影响）`)) return;
+  try {
+    await api('/api/jobs/' + id, { method: 'DELETE' });
+    await loadJobs();
+  } catch (e) { alert('删除失败：' + e.message); }
+}
+
+function exportCsv() {
+  fetch(API + '/api/talents/export', { headers: { 'Authorization': 'Bearer ' + TOKEN } })
+    .then(r => {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.blob();
+    })
+    .then(b => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(b);
+      a.download = `recruitment-ledger-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    })
+    .catch(e => alert('导出失败：' + e.message));
+}
+
+// ===== 初始化 =====
+(function init() {
+  const stageSel = document.getElementById('stageFilter');
+  stageSel.innerHTML = '<option value="">全部阶段</option>' + STAGE_KEYS.map(k => `<option value="${k}">${STAGES[k].label}</option>`).join('');
+  if (TOKEN) {
+    fetch(API + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: TOKEN }) })
+      .then(r => { if (r.ok) enterMain(); else localStorage.removeItem('invite_token'); })
+      .catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
