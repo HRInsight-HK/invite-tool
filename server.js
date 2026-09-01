@@ -17,7 +17,7 @@ const { buildEmail } = require('./lib/email-builder');
 const { smtpConfigured } = require('./lib/mailer');
 const { addLog, getLogs, getDb, dbDiag, closeDb } = require('./lib/store');
 
-const DEPLOY_TAG = 'worker-first-v1';
+const DEPLOY_TAG = 'auto-meet-v1';
 const { enqueue, workerStatus } = require('./lib/queue');
 
 const app = express();
@@ -195,6 +195,7 @@ app.post('/api/send', auth, async (req, res) => {
       status: 'queued',
       queueId: id,
     });
+    const autoMeet = data.mode === 'online' && !(data.meetLink || '').trim() && !(data.meetId || '').trim();
     res.json({
       success: true,
       queued: true,
@@ -202,9 +203,12 @@ app.post('/api/send', auth, async (req, res) => {
       subject,
       workerAlive: !!ws.alive,
       sender: 'HR_Support@insightelectionhk.com',
-      message: ws.alive
-        ? '已入队：本地 worker 正在以 HR_Support@insightelectionhk.com 发出（几秒内完成）'
-        : '已入队，但本地 worker 未运行——双击「启动云端worker.bat」，开启后自动发出',
+      autoMeet,
+      message: !ws.alive
+        ? '已入队，但本地 worker 未运行——双击「启动云端worker.bat」，开启后自动发出'
+        : autoMeet
+          ? '已入队：worker 正在自动创建腾讯会议（约进企微日程）并以 HR_Support 发出，约 10 秒完成'
+          : '已入队：本地 worker 正在以 HR_Support@insightelectionhk.com 发出（几秒内完成）',
     });
   } catch (qe) {
     if (qe.code === 'QUEUE_UNAVAILABLE') {

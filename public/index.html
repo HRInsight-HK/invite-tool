@@ -208,8 +208,9 @@
 
       <!-- 线上字段 -->
       <div id="onlineFields" style="display:none">
-        <div class="field"><label>腾讯会议链接（选填，没有则只写会议号）</label><input type="text" id="meetLink" placeholder="https://meeting.tencent.com/..."></div>
-        <div class="field"><label>会议号（选填）</label><input type="text" id="meetId" placeholder="如：474 821 073"></div>
+        <div class="field"><label>腾讯会议链接（留空 = 发送时自动创建）</label><input type="text" id="meetLink" placeholder="留空即可：发送时自动创建腾讯会议，链接自动进邮件 + 约进企微日程"></div>
+        <div class="field"><label>会议号（留空 = 自动创建后生成）</label><input type="text" id="meetId" placeholder="留空即可，与会议链接一并自动生成"></div>
+        <p style="font-size:11.5px;color:var(--gray);margin:-2px 0 0">已和候选人约定用现成会议？把链接或会议号填上就不自动创建。</p>
       </div>
 
       <div class="field"><label>面试环节（选填）</label><input type="text" id="interviewers" placeholder="默认：面试详情现场沟通；可填 HR初面→业务复面"></div>
@@ -381,10 +382,11 @@ async function doSend() {
     if (r.ok && res.success) {
       if (res.queued) {
         if (res.workerAlive) {
-          msg.textContent = '✅ 已入队 · 本地 worker 正在以 HR_Support@insightelectionhk.com 发出（几秒内送达）';
+          msg.textContent = '✅ ' + (res.message || '已入队 · 本地 worker 正在以 HR_Support@insightelectionhk.com 发出');
           msg.className = 'msg ok';
+          if (res.autoMeet) msg.textContent += ' · 会议创建成功后可去企微日程查看';
         } else {
-          msg.innerHTML = '⚠️ 已入队，但本地 worker 未运行——请在电脑上双击「<b>启动云端worker.bat</b>」，开启后自动发出';
+          msg.innerHTML = '⚠️ ' + (res.message || '已入队，但本地 worker 未运行——双击「启动云端worker.bat」后自动发出');
           msg.className = 'msg err';
         }
       } else {
