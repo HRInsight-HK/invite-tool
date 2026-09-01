@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>候选人管理台账 · 一页看懂</title>
+<style>
+:root{
+  --red:#D8553F; --pink-deep:#F4A89B; --pink-light:#FFF5F2;
+  --pink-bar:#FBE9EF; --line:#F3E7EB; --ink:#111111; --gray:#8A8A8A;
+  --font:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:#FFFFFF;color:#1F1F1F;font-family:var(--font);
+  font-size:15px;line-height:1.8;}
+.wrap{max-width:860px;margin:0 auto;padding:0 24px 60px;}
+.topbar{height:8px;background:var(--pink-bar);margin-bottom:36px;}
+
+.eyebrow{font-size:11px;letter-spacing:4px;color:var(--red);font-weight:600;}
+h1{font-size:32px;font-weight:700;color:var(--ink);letter-spacing:1px;margin:10px 0 0;}
+.sub{font-size:13px;color:var(--gray);margin-top:6px;letter-spacing:.5px;}
+.dots{margin-top:12px;}
+.dots span{display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:var(--pink-deep);margin-right:6px;}
+
+/* ---------- 入口卡片 ---------- */
+.entries{display:flex;gap:16px;flex-wrap:wrap;margin-top:28px;}
+.entry{flex:1 1 340px;background:var(--pink-light);border-left:4px solid var(--red);
+  border-radius:3px;padding:18px 20px;}
+.entry .no{font-size:12px;color:var(--red);font-weight:700;letter-spacing:2px;}
+.entry .who{font-size:19px;font-weight:700;color:var(--ink);margin:4px 0 10px;}
+.entry .link{display:block;background:#FFFFFF;border:1px dashed var(--pink-deep);
+  border-radius:3px;padding:10px 12px;font-size:14px;word-break:break-all;
+  color:#1A6FC4;text-decoration:underline;}
+.entry .pw{font-size:13px;color:#5A4E52;margin-top:10px;}
+.entry .pw b{font-size:16px;color:var(--red);letter-spacing:1px;}
+.entry .note{font-size:13px;color:#5A4E52;margin-top:10px;}
+
+/* ---------- 四步 ---------- */
+.steps{margin-top:34px;padding:0;list-style:none;}
+.steps>li{display:flex;gap:16px;padding:18px 0;border-bottom:1px solid var(--line);}
+.steps>li:last-child{border-bottom:0;}
+.steps .n{flex:0 0 34px;height:34px;border-radius:50%;background:var(--ink);
+  color:#fff;font-weight:700;font-size:16px;text-align:center;line-height:34px;}
+.steps .t{font-weight:700;font-size:16px;color:var(--ink);}
+.steps .d{font-size:14px;color:#5A4E52;margin-top:2px;}
+.steps .d b{color:var(--red);}
+.steps .kw{display:inline-block;background:var(--pink-bar);color:#8A4A3F;
+  border-radius:3px;padding:0 8px;font-size:12.5px;font-weight:600;margin:0 2px;}
+
+/* ---------- 提醒 ---------- */
+.remind{margin-top:26px;background:#FFF8E8;border-left:4px solid #E0A341;
+  border-radius:3px;padding:12px 16px;font-size:14px;}
+.remind b{color:#111;}
+
+/* ---------- FAQ ---------- */
+.faq{margin-top:34px;}
+.faq h2{font-size:18px;font-weight:700;color:var(--ink);margin:0 0 6px;}
+.faq h2 .lab{color:var(--red);font-size:11px;letter-spacing:3px;display:block;margin-bottom:4px;}
+.faq table{width:100%;border-collapse:collapse;font-size:14px;}
+.faq td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+.faq td.q{white-space:nowrap;color:#9A8B90;font-weight:600;width:190px;}
+
+.foot{margin-top:40px;padding-top:14px;border-top:1px solid var(--line);
+  font-size:12px;color:var(--gray);text-align:center;}
+
+@media print{
+  body{font-size:11pt;}
+  .wrap{max-width:100%;}
+  .steps>li{page-break-inside:avoid;}
+  .entry{page-break-inside:avoid;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="topbar"></div>
+
+<div class="eyebrow">RECRUITMENT LEDGER · 一 页 看 懂</div>
+<h1>候选人管理台账 · 使用指南</h1>
+<div class="sub">简历库 + 招聘数据台账：入库 → 邀约 → 面试 → 录用，全流程一个页面</div>
+<div class="dots"><span></span><span></span><span></span></div>
+
+<!-- 入口 -->
+<div class="entries">
+  <div class="entry">
+    <div class="no">唯一入口</div>
+    <div class="who">候选人管理台账</div>
+    <a class="link" href="https://invite-tool.onrender.com/ledger.html">https://invite-tool.onrender.com/ledger.html</a>
+    <div class="pw">口令：<b>hr@2026</b>（电脑 / 手机浏览器都能开）</div>
+    <div class="note">历史候选人 <b>497 人、20 个岗位</b>已全部导入，上来就能搜到。
+    顶部是<b>招聘漏斗</b>（简历→有效→一面→二面→录用→入职）+ 数据分析，
+    下方是候选人列表，按岗位 / 阶段 / 来源筛选。</div>
+  </div>
+</div>
+
+<!-- 四步 -->
+<ol class="steps">
+  <li>
+    <div class="n">1</div>
+    <div>
+      <div class="t">新候选人入库 —— 三条路，都不用手动敲字段</div>
+      <div class="d">
+        <b>路 A · 上传简历 AI 识别（推荐）</b>：点<span class="kw">新增候选人</span>→ 选简历文件（PDF / Word .docx），
+        AI 自动识别<b>姓名、电话、邮箱、性别年龄、学历专业学校、工作经验、求职意向、期望薪资、英语证书、自我评价</b>等 14 项并预填，
+        核对补漏后保存（提示「已识别 N 项」）。简历文件同时存档，日后随时下载。<br>
+        <b>路 B · WPS 问卷自动同步</b>：候选人提交信息采集表后<b>自动</b>进台账建档——按手机号＞邮箱＞姓名去重，
+        老候选人只补空缺字段，不会覆盖已填内容。<br>
+        <b>路 C · 手动新增</b>：只知道基本信息时直接填，后续再补简历。
+      </div>
+    </div>
+  </li>
+  <li>
+    <div class="n">2</div>
+    <div>
+      <div class="t">发面试邀约 —— 台账一键带出信息</div>
+      <div class="d">候选人行里点<span class="kw">发邀约</span>，自动带出姓名、邮箱、岗位跳到邀约工具，不用重复填。
+      线上面试不用自己建会议——时间填好发送后<b>自动创建腾讯会议</b>，链接和会议号自动写进邮件，并自动约进企微日程。</div>
+    </div>
+  </li>
+  <li>
+    <div class="n">3</div>
+    <div>
+      <div class="t">面试结束 —— 一键记结果，阶段自动推进</div>
+      <div class="d">候选人详情页点<span class="kw">记录面试结果</span>三选一：<br>
+        <b>通过</b>：一面通过 → 自动进「待约二面」；二面通过 → 自动进「录用」<br>
+        <b>有机会</b>：先挂起，列表里标 <b>☆ 有机会</b> 徽章，后续补记<br>
+        <b>未通过</b>：自动标记「已淘汰」（可填淘汰原因，进时间线）<br>
+        每一步操作都记入候选人时间线，谁改的、什么时候改的，全程可查。</div>
+    </div>
+  </li>
+  <li>
+    <div class="n">4</div>
+    <div>
+      <div class="t">看数据 —— 漏斗 + 分析随时刷新</div>
+      <div class="d">顶部漏斗按最新数据自动刷新（各层人数 + 层间转化率 + 整体转化）；
+      漏斗下方四张分析卡：来源分布、学历分布、工作经验、月度新增趋势。
+      右上角<span class="kw">导出 CSV</span>可下载全量数据自己再加工。</div>
+    </div>
+  </li>
+</ol>
+
+<!-- 提醒 -->
+<div class="remind" style="background:#faf7f8">
+  <b>三个使用约定：</b>&nbsp;&nbsp;① AI 识别结果<b>只是预填</b>，保存前务必核对（识别错姓名/工作年限很常见，规则引擎不做臆测）；
+  ② .doc 老格式和图片简历<b>只存档、不识别</b>——用 WPS 另存为 .docx 或 PDF 再传即可识别；
+  ③ 口令不外发，仅人事部内部使用。
+</div>
+
+<!-- FAQ -->
+<div class="faq">
+  <h2><span class="lab">FAQ</span>常 见 问 题</h2>
+  <table>
+    <tr><td class="q">AI 识别支持哪些格式</td><td>PDF / .docx / .txt 可识别并预填；.doc、.wps、图片（PNG/JPG）只存档不识别，转存 PDF 后可再传识别；文件上限 12MB。</td></tr>
+    <tr><td class="q">WPS 提交后多久进台账</td><td>实时。候选人一提交，几秒内自动建档或合并到已有档案（按手机号＞邮箱＞姓名去重，重复提交不会建重复档）。</td></tr>
+    <tr><td class="q">候选人在台账里搜不到</td><td>历史 497 人已全量导入；若是新候选人，走第 1 步三条路任意一条入库。搜索框支持姓名模糊搜索。</td></tr>
+    <tr><td class="q">简历文件去哪了</td><td>存在云端简历库里。打开候选人详情 → 「下载简历」即可取回原件。</td></tr>
+    <tr><td class="q">「☆ 有机会」是什么</td><td>面试官觉得暂时不合适但值得留意的候选人。挂起标星，之后补记通过/未通过，徽章自动清除。</td></tr>
+    <tr><td class="q">阶段选错了能改吗</td><td>能。行内「阶段」下拉随时可改；系统防倒退（录用的人不会误点回「一面」），时间线全记录。</td></tr>
+    <tr><td class="q">数据能导出吗</td><td>右上角「导出 CSV」一键下载全量候选人数据（含阶段、来源、联系方式），Excel 直接打开。</td></tr>
+    <tr><td class="q">从台账发邀约要注意</td><td>发件前确认电脑上「启动云端worker.bat」已开启（工具页显示本地 worker 在线）。邮件由 HR_Support@insightelectionhk.com 真实发出。</td></tr>
+  </table>
+</div>
+
+<div class="foot">候选人管理台账 · 2026-09-01 上线 · 由人事小助手（内用）代发</div>
+</div>
+</body>
+</html>
