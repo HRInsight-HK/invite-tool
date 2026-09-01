@@ -83,14 +83,10 @@
   .funnel { background: var(--pink-pale); border-left: 4px solid var(--pink-deep); border-radius: 4px; padding: 16px 20px; margin-bottom: 14px; }
   .funnel h2 { font-size: 14.5px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
   .funnel h2 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pink-deep); }
-  .f-rows { display: flex; flex-direction: column; gap: 7px; }
-  .f-row { display: grid; grid-template-columns: 78px 1fr 120px; gap: 10px; align-items: center; }
-  .f-label { font-size: 12.5px; color: #4A4A4A; font-weight: 600; text-align: right; }
-  .f-bar-track { background: #fff; border-radius: 3px; height: 24px; position: relative; overflow: hidden; border: 1px solid #F0E3E6; }
-  .f-bar { height: 100%; background: linear-gradient(90deg, var(--pink-soft), var(--pink-deep)); border-radius: 3px; min-width: 2px; transition: width .4s; }
-  .f-num { font-size: 12.5px; color: var(--ink); white-space: nowrap; }
-  .f-num b { font-size: 14px; }
-  .f-num .rate { color: var(--pink-deep); font-size: 11.5px; margin-left: 6px; }
+  .f-rows { margin: 4px 0 6px; }
+  .f-svg { width: 100%; max-width: 880px; display: block; }
+  .f-svg polygon.fl { transition: opacity .15s; }
+  .f-svg polygon.fl:hover { opacity: .82; }
   .f-jobs { margin-top: 14px; overflow-x: auto; }
   .f-jobs table { width: 100%; border-collapse: collapse; font-size: 12px; white-space: nowrap; }
   .f-jobs th { text-align: left; padding: 6px 10px; background: var(--pink-light); color: var(--pink-deep); font-weight: 700; }
@@ -504,22 +500,7 @@ async function loadInvites() {
 function renderFunnel() {
   const f = state.funnel; if (!f) return;
   const totals = f.totals || [];
-  const max = Math.max(...totals.map(t => t.count), 1);
-  let html = '';
-  totals.forEach((t, i) => {
-    const w = Math.round(t.count / max * 100);
-    let rate = '';
-    if (i > 0 && totals[i-1].count > 0) {
-      rate = `<span class="rate">${(t.count / totals[i-1].count * 100).toFixed(1)}%</span>`;
-    }
-    html += `
-      <div class="f-row">
-        <div class="f-label">${esc(t.label)}</div>
-        <div class="f-bar-track"><div class="f-bar" style="width:${w}%"></div></div>
-        <div class="f-num"><b>${t.count}</b> 人${rate}</div>
-      </div>`;
-  });
-  document.getElementById('funnelRows').innerHTML = html;
+  document.getElementById('funnelRows').innerHTML = totals.length ? buildFunnelSvg(totals) : '';
 
   const jobs = (f.byJob || []).filter(j => j.resumes > 0);
   if (jobs.length) {
@@ -536,6 +517,45 @@ function renderFunnel() {
         </tbody>
       </table>`;
   }
+}
+
+// 漏斗之所以是漏斗，就因为它像个漏斗：上宽下窄、逐层收口的真·漏斗图
+function buildFunnelSvg(totals) {
+  const W = 760, LH = 44, PAD = 8, cx = 300;
+  const n = totals.length;
+  const maxC = Math.max(...totals.map(t => t.count), 1);
+  const MAX_HW = 290, MIN_HW = 45;
+  const hw = totals.map(t => Math.max(MIN_HW, Math.round(t.count / maxC * MAX_HW)));
+  for (let i = 1; i < n; i++) hw[i] = Math.min(hw[i], hw[i - 1]); // 保证单调收窄
+  const RAMP = ['#FBE9EF', '#F4A89B', '#E98F87', '#DD7268', '#D8553F', '#BF3F2C'];
+  const lastBotHw = Math.max(14, Math.round(hw[n - 1] * 0.4)); // 底部收成漏斗嘴
+  let y = PAD, s = '';
+  for (let i = 0; i < n; i++) {
+    const topHw = hw[i];
+    const botHw = i === n - 1 ? lastBotHw : hw[i + 1];
+    const fill = RAMP[Math.min(i, RAMP.length - 1)];
+    const share = (totals[i].count / maxC * 100).toFixed(1);
+    s += `<polygon class="fl" points="${cx - topHw},${y} ${cx + topHw},${y} ${cx + botHw},${y + LH} ${cx - botHw},${y + LH}" fill="${fill}" stroke="#fff" stroke-width="1.5"><title>${esc(totals[i].label)}：${totals[i].count} 人（占${esc(totals[0].label)} ${share}%）</title></polygon>`;
+    const wpx = topHw * 2;
+    const fs = wpx >= 200 ? 13.5 : (wpx >= 110 ? 12.5 : 11.5);
+    const tCol = i >= 4 ? '#FFFFFF' : '#1A1A1A';
+    const ty = i === n - 1 ? y + 17 : y + LH / 2 + 4.5;
+    s += `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${fs}" font-weight="700" fill="${tCol}">${esc(totals[i].label)} ${totals[i].count} 人</text>`;
+    if (i > 0) {
+      const prev = totals[i - 1].count, c = totals[i].count;
+      const rate = prev > 0 ? (c / prev * 100).toFixed(1) : '—';
+      const edge = cx + topHw;
+      if (edge < 582) s += `<line x1="${edge + 7}" y1="${y}" x2="590" y2="${y}" stroke="#E9D5DA" stroke-width="1" stroke-dasharray="3 3"/>`;
+      s += `<text x="598" y="${y + 3.5}" font-size="12" font-weight="700" fill="#C26B86">${rate}%</text>`;
+      s += `<text x="598" y="${y + 17}" font-size="10.5" fill="#8C8C8C">${prev} → ${c}</text>`;
+    }
+    y += LH;
+  }
+  const first = totals[0].count, last = totals[n - 1].count;
+  const totalRate = first > 0 ? (last / first * 100).toFixed(1) : '—';
+  s += `<circle cx="${cx}" cy="${y + 11}" r="4.5" fill="#D8553F"><title>漏到最后的，才是真正入职的人</title></circle>`;
+  s += `<text x="${cx}" y="${y + 32}" text-anchor="middle" font-size="12" font-weight="700" fill="#D8553F">整体转化 ${totalRate}%（${esc(totals[0].label)} → ${esc(totals[n - 1].label)}）</text>`;
+  return `<svg class="f-svg" viewBox="0 0 ${W} ${y + 40}" role="img" aria-label="招聘漏斗图">${s}</svg>`;
 }
 
 function renderChips() {
